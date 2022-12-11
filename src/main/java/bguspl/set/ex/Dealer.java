@@ -3,6 +3,7 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.List;
+import java.util.Locale.Category;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -21,6 +22,11 @@ public class Dealer implements Runnable {
      */
     private final Table table;
     private final Player[] players;
+    private Thread[] playerThreads;
+    /**
+     * Utils
+     */
+    private long timerStart;
 
     /**
      * The list of card ids that are left in the dealer's deck.
@@ -41,6 +47,8 @@ public class Dealer implements Runnable {
         this.env = env;
         this.table = table;
         this.players = players;
+        this.playerThreads = new Thread[players.length];
+        for (int i=0; i<players.length; i++) playerThreads[i] = new Thread(this.players[i]);
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
     }
 
@@ -50,12 +58,19 @@ public class Dealer implements Runnable {
     @Override
     public void run() {
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
+
+        for (Thread playerThread : playerThreads) playerThread.run();
+
         while (!shouldFinish()) {
             placeCardsOnTable();
             timerLoop();
             updateTimerDisplay(false);
             removeAllCardsFromTable();
         }
+
+        for (int i = playerThreads.length - 1; i >= 0; i--)
+            try{ playerThreads[i].join(); } catch (InterruptedException ignored) {}
+
         announceWinners();
         System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
     }
@@ -64,6 +79,8 @@ public class Dealer implements Runnable {
      * The inner loop of the dealer thread that runs as long as the countdown did not time out.
      */
     private void timerLoop() {
+        timerStart = System.currentTimeMillis();
+        reshuffleTime = timerStart + env.config.turnTimeoutMillis;
         while (!terminate && System.currentTimeMillis() < reshuffleTime) {
             sleepUntilWokenOrTimeout();
             updateTimerDisplay(false);
@@ -106,14 +123,16 @@ public class Dealer implements Runnable {
      * Sleep for a fixed amount of time or until the thread is awakened for some purpose.
      */
     private void sleepUntilWokenOrTimeout() {
-        // TODO implement
+        long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
+        synchronized (this) { try {wait(extraMillis);} catch (InterruptedException ignored) {} }
     }
 
     /**
      * Reset and/or update the countdown and the countdown display.
      */
     private void updateTimerDisplay(boolean reset) {
-        // TODO implement
+        env.ui.setCountdown(reshuffleTime - System.currentTimeMillis() - 1, reset);
+        System.out.println(System.currentTimeMillis()-timerStart);
     }
 
     /**
