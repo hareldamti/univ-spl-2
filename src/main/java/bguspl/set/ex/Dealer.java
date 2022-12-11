@@ -3,6 +3,7 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.List;
+import java.util.Random;
 import java.util.Locale.Category;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -116,7 +117,14 @@ public class Dealer implements Runnable {
      * Check if any cards can be removed from the deck and placed on the table.
      */
     private void placeCardsOnTable() {
-        // TODO implement
+        Random random = new Random();
+        for (int slot = 0; slot < table.slotToCard.length; slot++) {
+            if (table.slotToCard[slot] == null) {
+                int chosenCardIndex = random.nextInt(deck.size());
+                int chosenCard = deck.remove(chosenCardIndex);
+                table.placeCard(chosenCard, slot);
+            }
+        }
     }
 
     /**
@@ -132,14 +140,19 @@ public class Dealer implements Runnable {
      */
     private void updateTimerDisplay(boolean reset) {
         env.ui.setCountdown(reshuffleTime - System.currentTimeMillis() - 1, reset);
-        System.out.println(System.currentTimeMillis()-timerStart);
+        if (env.DEBUG) System.out.println(System.currentTimeMillis()-timerStart);
     }
 
     /**
      * Returns all the cards from the table to the deck.
      */
     private void removeAllCardsFromTable() {
-        // TODO implement
+        for (int slot = 0; slot < table.slotToCard.length; slot++) {
+            if (table.slotToCard[slot] != null) {
+                deck.add(table.slotToCard[slot]);
+                table.removeCard(slot);
+            }
+        }
     }
 
     /**

@@ -93,8 +93,7 @@ public class Table {
 
         cardToSlot[card] = slot;
         slotToCard[slot] = card;
-
-        // TODO implement
+        env.ui.placeCard(card, slot);
     }
 
     /**
@@ -105,8 +104,12 @@ public class Table {
         try {
             Thread.sleep(env.config.tableDelayMillis);
         } catch (InterruptedException ignored) {}
-
-        // TODO implement
+        if (slotToCard[slot] != null) {
+            int card = slotToCard[slot];
+            cardToSlot[card] = null;
+            slotToCard[slot] = null;
+            env.ui.removeCard(slot);
+        }
     }
 
     /**
