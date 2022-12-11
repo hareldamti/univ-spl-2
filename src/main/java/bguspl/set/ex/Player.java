@@ -74,7 +74,6 @@ public class Player implements Runnable {
         playerThread = Thread.currentThread();
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
         if (!human) createArtificialIntelligence();
-
         while (!terminate) {
             // TODO implement main player loop
         }
