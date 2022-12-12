@@ -118,6 +118,8 @@ public class Table {
      * @param slot   - the slot on which to place the token.
      */
     public void placeToken(int player, int slot) {
+        env.ui.placeToken(player, slot);
+        if (env.DEBUG) System.out.printf("%s token placed by player %s\n", slot, player);
         // TODO implement
     }
 
@@ -128,6 +130,8 @@ public class Table {
      * @return       - true iff a token was successfully removed.
      */
     public boolean removeToken(int player, int slot) {
+        env.ui.removeToken(player, slot);
+        if (env.DEBUG) System.out.printf("%s token removed by player %s\n", slot, player);
         // TODO implement
         return false;
     }

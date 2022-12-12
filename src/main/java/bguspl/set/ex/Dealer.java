@@ -60,8 +60,12 @@ public class Dealer implements Runnable {
     public void run() {
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
 
-        for (Thread playerThread : playerThreads) playerThread.run();
-
+        if (env.DEBUG) {
+            for (int i=0; i<playerThreads.length; i++) {
+                playerThreads[i].start();
+                System.out.printf("%s: %s\n",playerThreads[i].getName(),playerThreads[i].getState());
+            }
+        }
         while (!shouldFinish()) {
             placeCardsOnTable();
             timerLoop();
@@ -133,6 +137,13 @@ public class Dealer implements Runnable {
     private void sleepUntilWokenOrTimeout() {
         long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
         synchronized (this) { try {wait(extraMillis);} catch (InterruptedException ignored) {} }
+
+        if (env.DEBUG) {
+            for (Thread playerThread : playerThreads) {
+                System.out.printf("%s: %s\n",playerThread.getName(),playerThread.getState());
+            }
+        }
+
     }
 
     /**
@@ -140,7 +151,6 @@ public class Dealer implements Runnable {
      */
     private void updateTimerDisplay(boolean reset) {
         env.ui.setCountdown(reshuffleTime - System.currentTimeMillis() - 1, reset);
-        if (env.DEBUG) System.out.println(System.currentTimeMillis()-timerStart);
     }
 
     /**
