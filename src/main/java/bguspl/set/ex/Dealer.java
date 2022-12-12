@@ -103,6 +103,31 @@ public class Dealer implements Runnable {
         reshuffleTime = timerStart + env.config.turnTimeoutMillis;
         while (!terminate && System.currentTimeMillis() < reshuffleTime) {
             sleepUntilWokenOrTimeout();
+
+            //checking if we woke up because of players' notify
+            synchronized(this){
+                while(checkForSets.size() > 0){
+                    int playerId = checkForSets.pollFirst();
+                    int[] playerTokenPlacements = players[playerId].getTokenPlacements();
+                    int[] cardsInSlotsOfTokens = new int[playerTokenPlacements.length];
+        
+                    for(int i = 0;i < playerTokenPlacements.length; i++){
+                        cardsInSlotsOfTokens[i] = table.slotToCard[i];
+                    }
+
+                    if(env.util.testSet(cardsInSlotsOfTokens)){
+                        players[playerId].point();
+                        if(env.DEBUG) System.out.println("set found\n");
+                        //TODO add low penalty
+                        //TODO clear player tokenList
+                    }
+                    else{
+                        if(env.DEBUG) System.out.println("set not found\n");
+                        //TODO add heavy penalty
+                    }
+                }
+            }
+
             updateTimerDisplay(false);
             removeCardsFromTable();
             placeCardsOnTable();
@@ -153,39 +178,11 @@ public class Dealer implements Runnable {
         long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
         synchronized (this) { try {wait(extraMillis);} catch (InterruptedException ignored) {} }
 
-        while(checkForSets.size() > 0){
-            int playerId = checkForSets.pollFirst();
-            int[] playerTokenPlacements = players[playerId].getTokenPlacements();
-            int[] cardsInSlotsOfTokens = new int[playerTokenPlacements.length];
-
-            for(int i = 0;i < playerTokenPlacements.length; i++){
-                cardsInSlotsOfTokens[i] = table.slotToCard[i];
-            }
-            int[][] features = env.util.cardsToFeatures(Arrays.copyOf(cardsInSlotsOfTokens, cardsInSlotsOfTokens.length));
-            for(int[] feature: features){
-                for(int card: feature){
-                    System.out.println(card);;
-                }
-                System.out.println("next feature");
-            }
-            System.out.println(cardsInSlotsOfTokens.toString());
-            if(env.util.testSet(cardsInSlotsOfTokens)){
-                players[playerId].point();
-                System.out.println("set found\n");
-                //TODO add low penalty
-                //TODO clear player tokenList
-            }
-            else{
-                System.out.println("set not found\n");
-                //TODO add heavy penalty
-            }
-        }
         if (env.DEBUG) {
             for (Thread playerThread : playerThreads) {
                 System.out.printf("%s: %s\n",playerThread.getName(),playerThread.getState());
             }
         }
-
     }
 
     /**
