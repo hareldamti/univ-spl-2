@@ -111,8 +111,9 @@ public class Dealer implements Runnable {
                     int[] playerTokenPlacements = players[playerId].getTokenPlacements();
                     int[] cardsInSlotsOfTokens = new int[playerTokenPlacements.length];
         
-                    for(int i = 0;i < playerTokenPlacements.length; i++){
-                        cardsInSlotsOfTokens[i] = table.slotToCard[i];
+                    for(int i = 0; i < playerTokenPlacements.length; i++){
+                        cardsInSlotsOfTokens[i] = table.slotToCard[playerTokenPlacements[i]];
+                        //if(env.DEBUG) System.out.println(String.format("%" + env.config.featureCount + "s", Integer.toString(cardsInSlotsOfTokens[i], env.config.featureSize)).replace(' ', '0'));
                     }
 
                     if(env.util.testSet(cardsInSlotsOfTokens)){
@@ -180,7 +181,7 @@ public class Dealer implements Runnable {
 
         if (env.DEBUG) {
             for (Thread playerThread : playerThreads) {
-                System.out.printf("%s: %s\n",playerThread.getName(),playerThread.getState());
+                //System.out.printf("%s: %s\n",playerThread.getName(),playerThread.getState());
             }
         }
     }

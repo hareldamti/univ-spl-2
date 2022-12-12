@@ -207,7 +207,9 @@ public class Player implements Runnable {
         int[] return_values = new int[tokenPlacements.size()];
         for(int i = 0; i < return_values.length; i++){
             return_values[i] = tokenPlacements.get(i);
+            //if(env.DEBUG) System.out.println(String.format("%" + env.config.featureCount + "s", Integer.toString(table.slotToCard[return_values[i]], env.config.featureSize)).replace(' ', '0'));
         }
+        //if(env.DEBUG) System.out.println("");
         return return_values;
     }
 }
