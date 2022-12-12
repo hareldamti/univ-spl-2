@@ -1,8 +1,14 @@
 package bguspl.set.ex;
 
 import bguspl.set.Env;
+import bguspl.set.UtilImpl;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Random;
 import java.util.Locale.Category;
 import java.util.stream.Collectors;
@@ -44,12 +50,15 @@ public class Dealer implements Runnable {
      */
     private long reshuffleTime = Long.MAX_VALUE;
 
+    private ArrayDeque<Integer> checkForSets;
+
     public Dealer(Env env, Table table, Player[] players) {
         this.env = env;
         this.table = table;
         this.players = players;
         this.playerThreads = new Thread[players.length];
-        for (int i=0; i<players.length; i++) playerThreads[i] = new Thread(this.players[i]);
+        this.checkForSets = new ArrayDeque<>(players.length);
+
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
     }
 
@@ -60,10 +69,16 @@ public class Dealer implements Runnable {
     public void run() {
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
 
+        System.out.println("creating players threads...\n");
+        for (int i=0; i<players.length; i++) 
+        {
+            playerThreads[i] = new Thread(this.players[i]);
+        }
+
         if (env.DEBUG) {
             for (int i=0; i<playerThreads.length; i++) {
                 playerThreads[i].start();
-                System.out.printf("%s: %s\n",playerThreads[i].getName(),playerThreads[i].getState());
+                //System.out.printf("%s: %s\n",playerThreads[i].getName(),playerThreads[i].getState());
             }
         }
         while (!shouldFinish()) {
@@ -138,6 +153,33 @@ public class Dealer implements Runnable {
         long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
         synchronized (this) { try {wait(extraMillis);} catch (InterruptedException ignored) {} }
 
+        while(checkForSets.size() > 0){
+            int playerId = checkForSets.pollFirst();
+            int[] playerTokenPlacements = players[playerId].getTokenPlacements();
+            int[] cardsInSlotsOfTokens = new int[playerTokenPlacements.length];
+
+            for(int i = 0;i < playerTokenPlacements.length; i++){
+                cardsInSlotsOfTokens[i] = table.slotToCard[i];
+            }
+            int[][] features = env.util.cardsToFeatures(Arrays.copyOf(cardsInSlotsOfTokens, cardsInSlotsOfTokens.length));
+            for(int[] feature: features){
+                for(int card: feature){
+                    System.out.println(card);;
+                }
+                System.out.println("next feature");
+            }
+            System.out.println(cardsInSlotsOfTokens.toString());
+            if(env.util.testSet(cardsInSlotsOfTokens)){
+                players[playerId].point();
+                System.out.println("set found\n");
+                //TODO add low penalty
+                //TODO clear player tokenList
+            }
+            else{
+                System.out.println("set not found\n");
+                //TODO add heavy penalty
+            }
+        }
         if (env.DEBUG) {
             for (Thread playerThread : playerThreads) {
                 System.out.printf("%s: %s\n",playerThread.getName(),playerThread.getState());
@@ -163,6 +205,15 @@ public class Dealer implements Runnable {
                 table.removeCard(slot);
             }
         }
+    }
+
+    /**
+     * Used by the players to add themselves to the dealer checklist
+     * 
+     * @param playerId
+     */
+    public void addToCheckList(int playerId){
+        checkForSets.add(playerId);
     }
 
     /**

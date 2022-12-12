@@ -25,6 +25,12 @@ public class Player implements Runnable {
     private final Table table;
 
     /**
+     * Dealer instance
+     */
+
+     private final Dealer dealer;
+
+    /**
      * The id of the player (starting from 0).
      */
     public final int id;
@@ -59,7 +65,7 @@ public class Player implements Runnable {
      */
     private Object pressedSlotLock;
     private Integer pressedSlot;
-    private List<Integer> tokenPlacements;
+    private LinkedList<Integer> tokenPlacements;
 
 
     /**
@@ -78,6 +84,7 @@ public class Player implements Runnable {
         this.human = human;
         this.pressedSlotLock = new Object();
         this.tokenPlacements = new LinkedList<Integer>();
+        this.dealer = dealer;
 
     }
 
@@ -91,7 +98,7 @@ public class Player implements Runnable {
         if (!human) createArtificialIntelligence();
         while (!terminate) {
             synchronized(pressedSlotLock){
-                System.out.printf("thread: %s\tpressedSlot: %s", Thread.currentThread().getName(), pressedSlot);
+                System.out.printf("thread: %s\tpressedSlot: %s\n", Thread.currentThread().getName(), pressedSlot);
                 while(pressedSlot == null)
                     try{ pressedSlotLock.wait(); } catch(InterruptedException ignored){}
                 toggleToken(pressedSlot);
@@ -99,7 +106,7 @@ public class Player implements Runnable {
             }
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
-        System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
+        System.out.printf("Info: Thread %s terminated.%n\n", Thread.currentThread().getName());
     }
 
     /**
@@ -141,10 +148,16 @@ public class Player implements Runnable {
         }
     }
 
+    /**
+     * This method is called when the player thread recognized a key was pressed and opts to place/remove a token
+     * 
+     * @param slot - the slot corresponding to the key pressed.
+     * 
+     */
     private void toggleToken(int slot) {
         synchronized(tokenPlacements) {
             if (tokenPlacements.contains(slot)) {
-                tokenPlacements.remove(slot);
+                tokenPlacements.remove(tokenPlacements.indexOf(slot));
                 table.removeToken(id, slot);
             }
             else if (tokenPlacements.size() < 3) {
@@ -152,6 +165,10 @@ public class Player implements Runnable {
                 table.placeToken(id, slot);
             }
             if (tokenPlacements.size() == 3) {
+                synchronized(dealer){
+                    dealer.addToCheckList(id);
+                    dealer.notifyAll();
+                }
                 // TODO: Notify dealer and update with our tokens
             }
         }
@@ -179,5 +196,18 @@ public class Player implements Runnable {
 
     public int getScore() {
         return score;
+    }
+
+    /**
+     * Used by the dealer to access a player's token placement list
+     * 
+     * @return integer array representing the token placements
+     */
+    public int[] getTokenPlacements(){
+        int[] return_values = new int[tokenPlacements.size()];
+        for(int i = 0; i < return_values.length; i++){
+            return_values[i] = tokenPlacements.get(i);
+        }
+        return return_values;
     }
 }
