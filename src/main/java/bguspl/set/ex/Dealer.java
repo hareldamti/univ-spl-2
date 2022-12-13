@@ -102,9 +102,9 @@ public class Dealer implements Runnable {
             synchronized(setRequests){
                 checkSets();
             }
-            updateTimerDisplay(false);
-            removeCardsFromTable();
             placeCardsOnTable();
+            updateTimerDisplay(false);
+            
         }
     }
 
@@ -140,10 +140,16 @@ public class Dealer implements Runnable {
      * Check if any cards can be removed from the deck and placed on the table.
      */
     private void placeCardsOnTable() {
-        synchronized (env.ui) {
+        synchronized (table.playersTokens) {
             Random random = new Random();
             for (int slot = 0; slot < table.slotToCard.length; slot++) {
                 if (table.slotToCard[slot] == null) {
+                    synchronized (table.playersTokens) {
+                        for (int id = 0; id < table.playersTokens.size(); id++) {
+                            ArrayList<Integer> playerTokens = table.playersTokens.get(id);
+                            if (playerTokens.contains(slot)) table.toggleToken(id, slot);
+                        }
+                    }
                     int chosenCardIndex = random.nextInt(deck.size());
                     int chosenCard = deck.remove(chosenCardIndex);
                     table.placeCard(chosenCard, slot);
@@ -179,7 +185,10 @@ public class Dealer implements Runnable {
      * Returns all the cards from the table to the deck.
      */
     private void removeAllCardsFromTable() {
-        synchronized (env.ui) {
+        synchronized (table.playersTokens) {
+            for (ArrayList<Integer> playerTokens : table.playersTokens) {
+                //TODO: remove all tokens
+            }
             for (int slot = 0; slot < table.slotToCard.length; slot++) {
                 if (table.slotToCard[slot] != null) {
                     deck.add(table.slotToCard[slot]);
@@ -212,25 +221,24 @@ public class Dealer implements Runnable {
                 requestPlayerId = setRequests.pollFirst();
             }
             if (requestPlayerId != null) {
-                Player testedPlayer = players[requestPlayerId];
-                synchronized (testedPlayer) {
-                    int[] tokenPlacements = testedPlayer.getTokenPlacements();
-                    int[] chosenCards = new int[tokenPlacements.length];
-                    
+                Player player = players[requestPlayerId];
+                List<Integer> tokenPlacements;
+                synchronized(table.playersTokens) { tokenPlacements = table.playersTokens.get(requestPlayerId); }
+                synchronized(tokenPlacements) {
+                    int[] chosenCards = new int[tokenPlacements.size()];
                     boolean nullInSet = false;
-
-                    for (int i = 0; i < tokenPlacements.length; i++){
-                        nullInSet = table.slotToCard[tokenPlacements[i]] == null;
+                    for (int i = 0; i < tokenPlacements.size(); i++){
+                        nullInSet = table.slotToCard[tokenPlacements.get(i)] == null;
                         if (nullInSet) break;
-                        chosenCards[i] = table.slotToCard[tokenPlacements[i]];
+                        chosenCards[i] = table.slotToCard[tokenPlacements.get(i)];
                     }
-
+                
                     if (nullInSet) {
                         //TODO: handle
                     }
 
                     else if(env.util.testSet(chosenCards)){
-                        testedPlayer.point();
+                        player.point();
                         if(env.DEBUG) System.out.println("set found\n");
 
                         //TODO add low penalty
@@ -242,8 +250,8 @@ public class Dealer implements Runnable {
                         if(env.DEBUG) System.out.println("set not found\n");
                         //TODO add heavy penalty
                     }
+                    synchronized (player) { player.notifyAll(); }
                     
-                    testedPlayer.notifyAll();
                 }
             }
         }

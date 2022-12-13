@@ -3,6 +3,7 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.LinkedList;
 
 /**
@@ -65,8 +66,6 @@ public class Player implements Runnable {
      */
     private Object pressedSlotLock;
     private Integer pressedSlot;
-    private LinkedList<Integer> tokenPlacements;
-
 
     /**
      * The class constructor.
@@ -83,7 +82,7 @@ public class Player implements Runnable {
         this.id = id;
         this.human = human;
         this.pressedSlotLock = new Object();
-        this.tokenPlacements = new LinkedList<Integer>();
+        table.playersTokens.add(new ArrayList<Integer>(3));
         this.dealer = dealer;
 
     }
@@ -156,17 +155,10 @@ public class Player implements Runnable {
      * 
      */
     private void toggleToken(int slot) {
-        synchronized(tokenPlacements) {
-            if (tokenPlacements.contains(slot)) {
-                tokenPlacements.remove(tokenPlacements.indexOf(slot));
-                table.removeToken(id, slot);
-            }
-            else if (tokenPlacements.size() < 3) {
-                tokenPlacements.add(slot);
-                table.placeToken(id, slot);
-            }
-            if (tokenPlacements.size() == 3) {
-                    dealer.addSetRequest(id);
+        if (table.toggleToken(id, slot)) {
+            synchronized(this) {
+                dealer.addSetRequest(id);
+                try{ wait(); } catch (InterruptedException ignored) {}
             }
         }
     }
@@ -178,8 +170,6 @@ public class Player implements Runnable {
      * @post - the player's score is updated in the ui.
      */
     public void point() {
-        // TODO implement
-
         int ignored = table.countCards(); // this part is just for demonstration in the unit tests
         env.ui.setScore(id, ++score);
     }
@@ -193,20 +183,5 @@ public class Player implements Runnable {
 
     public int getScore() {
         return score;
-    }
-
-    /**
-     * Used by the dealer to access a player's token placement list
-     * 
-     * @return integer array representing the token placements
-     */
-    public int[] getTokenPlacements(){
-        int[] return_values = new int[tokenPlacements.size()];
-        for(int i = 0; i < return_values.length; i++){
-            return_values[i] = tokenPlacements.get(i);
-            //if(env.DEBUG) System.out.println(String.format("%" + env.config.featureCount + "s", Integer.toString(table.slotToCard[return_values[i]], env.config.featureSize)).replace(' ', '0'));
-        }
-        //if(env.DEBUG) System.out.println("");
-        return return_values;
     }
 }

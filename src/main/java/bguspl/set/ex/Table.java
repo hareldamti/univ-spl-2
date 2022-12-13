@@ -4,6 +4,7 @@ import bguspl.set.Env;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -30,6 +31,11 @@ public class Table {
     protected final Integer[] cardToSlot; // slot per card (if any)
 
     /**
+     * Maintaining token placements for all the players
+     */
+    public ArrayList<ArrayList<Integer>> playersTokens;
+
+    /**
      * Constructor for testing.
      *
      * @param env        - the game environment objects.
@@ -37,10 +43,10 @@ public class Table {
      * @param cardToSlot - mapping between a card and the slot it is in (null if none).
      */
     public Table(Env env, Integer[] slotToCard, Integer[] cardToSlot) {
-
         this.env = env;
         this.slotToCard = slotToCard;
         this.cardToSlot = cardToSlot;
+        this.playersTokens = new ArrayList<ArrayList<Integer>>();
     }
 
     /**
@@ -110,6 +116,29 @@ public class Table {
             slotToCard[slot] = null;
             env.ui.removeCard(slot);
         }
+    }
+
+    /**
+     * Toggles token placement for a player.
+     * @param player - the player's id.
+     * @param slot   - the slot on which to toggle the token.
+     * @return       - whether 3 token are now placed and the dealer should be called.
+     */
+    public boolean toggleToken(int player, int slot){
+        List<Integer> tokenPlacements;
+        synchronized(playersTokens) { tokenPlacements = playersTokens.get(player); }
+        synchronized(tokenPlacements) {
+            if (tokenPlacements.contains(slot)) {
+                tokenPlacements.remove(tokenPlacements.indexOf(slot));
+                removeToken(player, slot);
+            }
+            else if (tokenPlacements.size() < 3) {
+                tokenPlacements.add(slot);
+                placeToken(player, slot);
+                return tokenPlacements.size() == 3;
+            }
+        }
+        return false;
     }
 
     /**
