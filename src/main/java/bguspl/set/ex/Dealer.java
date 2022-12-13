@@ -69,7 +69,7 @@ public class Dealer implements Runnable {
     public void run() {
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
 
-        System.out.println("creating players threads...\n");
+        System.out.println("Info: creating players threads...\n");
         for (int i=0; i<players.length; i++) 
         {
             playerThreads[i] = new Thread(this.players[i]);
