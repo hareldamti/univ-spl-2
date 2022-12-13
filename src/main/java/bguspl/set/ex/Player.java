@@ -141,10 +141,12 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        synchronized(pressedSlotLock)
-        {
-            pressedSlot = slot;
-            pressedSlotLock.notifyAll();
+        if(table.slotToCard[slot] != null){
+            synchronized(pressedSlotLock)
+            {
+                pressedSlot = slot;
+                pressedSlotLock.notifyAll();
+            }
         }
     }
 

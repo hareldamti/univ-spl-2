@@ -106,27 +106,7 @@ public class Dealer implements Runnable {
 
             //checking if we woke up because of players' notify
             synchronized(this){
-                while(checkForSets.size() > 0){
-                    int playerId = checkForSets.pollFirst();
-                    int[] playerTokenPlacements = players[playerId].getTokenPlacements();
-                    int[] cardsInSlotsOfTokens = new int[playerTokenPlacements.length];
-        
-                    for(int i = 0; i < playerTokenPlacements.length; i++){
-                        cardsInSlotsOfTokens[i] = table.slotToCard[playerTokenPlacements[i]];
-                        //if(env.DEBUG) System.out.println(String.format("%" + env.config.featureCount + "s", Integer.toString(cardsInSlotsOfTokens[i], env.config.featureSize)).replace(' ', '0'));
-                    }
-
-                    if(env.util.testSet(cardsInSlotsOfTokens)){
-                        players[playerId].point();
-                        if(env.DEBUG) System.out.println("set found\n");
-                        //TODO add low penalty
-                        //TODO clear player tokenList
-                    }
-                    else{
-                        if(env.DEBUG) System.out.println("set not found\n");
-                        //TODO add heavy penalty
-                    }
-                }
+                checkSets();
             }
 
             updateTimerDisplay(false);
@@ -212,6 +192,38 @@ public class Dealer implements Runnable {
      */
     public void addToCheckList(int playerId){
         checkForSets.add(playerId);
+    }
+
+    /**
+     * Iterates through the check list to decide if a legal set was declared
+     * 
+     */
+    private void checkSets(){
+        while(checkForSets.size() > 0){
+            int playerId = checkForSets.pollFirst();
+            int[] playerTokenPlacements = players[playerId].getTokenPlacements();
+            int[] cardsInSlotsOfTokens = new int[playerTokenPlacements.length];
+            boolean nullInSet = false;
+
+            for(int i = 0; i < playerTokenPlacements.length; i++){
+                nullInSet = table.slotToCard[playerTokenPlacements[i]] == null;
+                if (nullInSet) break;
+                cardsInSlotsOfTokens[i] = table.slotToCard[playerTokenPlacements[i]];
+                //if(env.DEBUG) System.out.println(String.format("%" + env.config.featureCount + "s", Integer.toString(cardsInSlotsOfTokens[i], env.config.featureSize)).replace(' ', '0'));
+            }
+
+            if(!nullInSet && env.util.testSet(cardsInSlotsOfTokens)){
+                players[playerId].point();
+                if(env.DEBUG) System.out.println("set found\n");
+                //TODO add low penalty
+                //TODO clear player tokenList
+                //TODO clear set from table and place new cards
+            }
+            else{
+                if(env.DEBUG) System.out.println("set not found\n");
+                //TODO add heavy penalty
+            }
+        }
     }
 
     /**
