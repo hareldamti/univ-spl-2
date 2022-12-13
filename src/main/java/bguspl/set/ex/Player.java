@@ -93,20 +93,19 @@ public class Player implements Runnable {
      */
     @Override
     public void run() {
-        playerThread = Thread.currentThread();
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
+        playerThread = Thread.currentThread();
         if (!human) createArtificialIntelligence();
         while (!terminate) {
             synchronized(pressedSlotLock){
-                System.out.printf("thread: %s\tpressedSlot: %s\n", Thread.currentThread().getName(), pressedSlot);
                 while(pressedSlot == null)
-                    try{ pressedSlotLock.wait(); } catch(InterruptedException ignored){}
-                toggleToken(pressedSlot);
+                    try{ pressedSlotLock.wait(); } catch (InterruptedException interrupted){ break; }
+                if (pressedSlot != null) toggleToken(pressedSlot);
                 pressedSlot = null;
             }
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
-        System.out.printf("Info: Thread %s terminated.%n\n", Thread.currentThread().getName());
+        System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
     }
 
     /**
@@ -132,7 +131,7 @@ public class Player implements Runnable {
      * Called when the game should be terminated due to an external event.
      */
     public void terminate() {
-        // TODO implement
+        terminate = true;
     }
 
     /**
@@ -167,11 +166,7 @@ public class Player implements Runnable {
                 table.placeToken(id, slot);
             }
             if (tokenPlacements.size() == 3) {
-                synchronized(dealer){
-                    dealer.addToCheckList(id);
-                    dealer.notifyAll();
-                }
-                // TODO: Notify dealer and update with our tokens
+                    dealer.addSetRequest(id);
             }
         }
     }
