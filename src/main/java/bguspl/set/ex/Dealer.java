@@ -1,8 +1,14 @@
 package bguspl.set.ex;
 
 import bguspl.set.Env;
+import bguspl.set.UtilImpl;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Random;
 import java.util.Locale.Category;
 import java.util.stream.Collectors;
@@ -44,12 +50,15 @@ public class Dealer implements Runnable {
      */
     private long reshuffleTime = Long.MAX_VALUE;
 
+    private ArrayDeque<Integer> checkForSets;
+
     public Dealer(Env env, Table table, Player[] players) {
         this.env = env;
         this.table = table;
         this.players = players;
         this.playerThreads = new Thread[players.length];
-        for (int i=0; i<players.length; i++) playerThreads[i] = new Thread(this.players[i]);
+        this.checkForSets = new ArrayDeque<>(players.length);
+
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
     }
 
@@ -60,8 +69,18 @@ public class Dealer implements Runnable {
     public void run() {
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
 
-        for (Thread playerThread : playerThreads) playerThread.run();
+        System.out.println("Info: creating players threads...\n");
+        for (int i=0; i<players.length; i++) 
+        {
+            playerThreads[i] = new Thread(this.players[i]);
+        }
 
+        if (env.DEBUG) {
+            for (int i=0; i<playerThreads.length; i++) {
+                playerThreads[i].start();
+                //System.out.printf("%s: %s\n",playerThreads[i].getName(),playerThreads[i].getState());
+            }
+        }
         while (!shouldFinish()) {
             placeCardsOnTable();
             timerLoop();
@@ -84,6 +103,12 @@ public class Dealer implements Runnable {
         reshuffleTime = timerStart + env.config.turnTimeoutMillis;
         while (!terminate && System.currentTimeMillis() < reshuffleTime) {
             sleepUntilWokenOrTimeout();
+
+            //checking if we woke up because of players' notify
+            synchronized(this){
+                checkSets();
+            }
+
             updateTimerDisplay(false);
             removeCardsFromTable();
             placeCardsOnTable();
@@ -133,6 +158,12 @@ public class Dealer implements Runnable {
     private void sleepUntilWokenOrTimeout() {
         long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
         synchronized (this) { try {wait(extraMillis);} catch (InterruptedException ignored) {} }
+
+        if (env.DEBUG) {
+            for (Thread playerThread : playerThreads) {
+                //System.out.printf("%s: %s\n",playerThread.getName(),playerThread.getState());
+            }
+        }
     }
 
     /**
@@ -140,7 +171,6 @@ public class Dealer implements Runnable {
      */
     private void updateTimerDisplay(boolean reset) {
         env.ui.setCountdown(reshuffleTime - System.currentTimeMillis() - 1, reset);
-        if (env.DEBUG) System.out.println(System.currentTimeMillis()-timerStart);
     }
 
     /**
@@ -151,6 +181,47 @@ public class Dealer implements Runnable {
             if (table.slotToCard[slot] != null) {
                 deck.add(table.slotToCard[slot]);
                 table.removeCard(slot);
+            }
+        }
+    }
+
+    /**
+     * Used by the players to add themselves to the dealer checklist
+     * 
+     * @param playerId
+     */
+    public void addToCheckList(int playerId){
+        checkForSets.add(playerId);
+    }
+
+    /**
+     * Iterates through the check list to decide if a legal set was declared
+     * 
+     */
+    private void checkSets(){
+        while(checkForSets.size() > 0){
+            int playerId = checkForSets.pollFirst();
+            int[] playerTokenPlacements = players[playerId].getTokenPlacements();
+            int[] cardsInSlotsOfTokens = new int[playerTokenPlacements.length];
+            boolean nullInSet = false;
+
+            for(int i = 0; i < playerTokenPlacements.length; i++){
+                nullInSet = table.slotToCard[playerTokenPlacements[i]] == null;
+                if (nullInSet) break;
+                cardsInSlotsOfTokens[i] = table.slotToCard[playerTokenPlacements[i]];
+                //if(env.DEBUG) System.out.println(String.format("%" + env.config.featureCount + "s", Integer.toString(cardsInSlotsOfTokens[i], env.config.featureSize)).replace(' ', '0'));
+            }
+
+            if(!nullInSet && env.util.testSet(cardsInSlotsOfTokens)){
+                players[playerId].point();
+                if(env.DEBUG) System.out.println("set found\n");
+                //TODO add low penalty
+                //TODO clear player tokenList
+                //TODO clear set from table and place new cards
+            }
+            else{
+                if(env.DEBUG) System.out.println("set not found\n");
+                //TODO add heavy penalty
             }
         }
     }
