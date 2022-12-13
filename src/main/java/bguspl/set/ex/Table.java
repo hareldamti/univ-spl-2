@@ -18,7 +18,7 @@ public class Table {
      * The game environment object.
      */
     private final Env env;
-
+    
     /**
      * Mapping between a slot and the card placed in it (null if none).
      */
@@ -119,8 +119,6 @@ public class Table {
      */
     public void placeToken(int player, int slot) {
         env.ui.placeToken(player, slot);
-        if (env.DEBUG) System.out.printf("%s token placed by player %s\n", slot, player);
-        // TODO implement
     }
 
     /**
@@ -131,8 +129,6 @@ public class Table {
      */
     public boolean removeToken(int player, int slot) {
         env.ui.removeToken(player, slot);
-        if (env.DEBUG) System.out.printf("%s token removed by player %s\n", slot, player);
-        // TODO implement
         return false;
     }
 }
