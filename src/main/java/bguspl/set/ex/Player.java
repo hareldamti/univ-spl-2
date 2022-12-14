@@ -3,6 +3,7 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.List;
+import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.LinkedList;
 
@@ -139,7 +140,7 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        if(table.slotToCard[slot] != null){
+        if(table.slotToCard[slot] != null && playerThread.getState() != State.TIMED_WAITING){
             synchronized(pressedSlotLock)
             {
                 pressedSlot = slot;
@@ -158,8 +159,9 @@ public class Player implements Runnable {
         if (table.toggleToken(id, slot)) {
             synchronized(this) {
                 dealer.addSetRequest(id);
-                try{ wait(); } catch (InterruptedException ignored) {}
+                try{wait(); } catch (InterruptedException ignored) {}
             }
+            penalty();
         }
     }
 
@@ -178,7 +180,20 @@ public class Player implements Runnable {
      * Penalize a player and perform other related actions.
      */
     public void penalty() {
-        // TODO implement
+        boolean heavyPenalty;
+        synchronized(dealer.penalties){
+            //current time
+            heavyPenalty =  dealer.penalties.getPenalty(id);
+            dealer.penalties.removePenalty(id);
+        }
+        int amount = (heavyPenalty) ? 3000 : 1000;
+        try {
+            Thread.sleep(amount);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        
+        }
     }
 
     public int getScore() {
