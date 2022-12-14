@@ -52,7 +52,15 @@ public class Dealer implements Runnable {
      */
     private long reshuffleTime = Long.MAX_VALUE;
 
+    /**
+     * Queue of players' set check requests
+     */
     private ArrayDeque<Integer> setRequests;
+
+    /**
+     * Instance of an object that tracks real-time penalties state for all players
+     */
+    public Penalties penalties;
 
     public Dealer(Env env, Table table, Player[] players) {
         this.env = env;
@@ -60,6 +68,7 @@ public class Dealer implements Runnable {
         this.players = players;
         this.playerThreads = new Thread[players.length];
         this.setRequests = new ArrayDeque<>(players.length);
+        this.penalties = new Penalties(players.length);
 
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
     }
@@ -248,6 +257,7 @@ public class Dealer implements Runnable {
 
                     else {
                         if(env.DEBUG) System.out.println("set not found\n");
+                        synchronized(penalties){penalties.setPenalty(requestPlayerId);}
                         //TODO add heavy penalty
                     }
                     synchronized (player) { player.notifyAll(); }
