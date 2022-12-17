@@ -6,6 +6,7 @@ import java.util.List;
 import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 /**
  * This class manages the players' threads and data
@@ -106,7 +107,8 @@ public class Player implements Runnable {
             synchronized(pressedSlotLock){
                 while(pressedSlot == null)
                     try{ pressedSlotLock.wait(); } catch (InterruptedException interrupted){ break; }
-                if (pressedSlot != null) toggleToken(pressedSlot);
+                if (pressedSlot != null) 
+                    toggleToken(pressedSlot);
                 pressedSlot = null;
             }
         }
@@ -147,7 +149,8 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        if(playerThread.getState() != State.TIMED_WAITING){
+
+        if(playerThread.getState() != State.TIMED_WAITING) {
             synchronized(pressedSlotLock)
             {
                 pressedSlot = slot;
@@ -163,11 +166,15 @@ public class Player implements Runnable {
      * 
      */
     private void toggleToken(int slot) {
-        if (table.toggleToken(id, slot)) {
-            synchronized(this) {
-                dealer.addSetRequest(id);
-                try{ wait(); } catch (InterruptedException ignored) {}
-                penalty();
+        if (table.tokensLock.playerTryLock()) {
+            boolean addRequest = table.toggleToken(id, slot);
+            table.tokensLock.playerUnlock();
+            if (addRequest) {
+                synchronized(this) {
+                    dealer.addSetRequest(id);
+                    try{ wait(); } catch (InterruptedException ignored) {}
+                    penalty();
+                }
             }
         }
     }

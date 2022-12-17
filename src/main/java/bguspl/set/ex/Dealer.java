@@ -75,15 +75,19 @@ public class Dealer implements Runnable {
             playerThreads[i] = new Thread(this.players[i]);
             playerThreads[i].start();
         }
-        synchronized (table.playersTokens) {placeCardsOnTable();}
+
+        table.tokensLock.dealerLock();
+        placeCardsOnTable();
+        table.tokensLock.dealerUnlock();
         
         while (!shouldFinish()) {
             timerLoop();
             updateTimerDisplay(false);
-            synchronized (table.playersTokens) {
-                removeAllCardsFromTable();
-                placeCardsOnTable();
-            }
+
+            table.tokensLock.dealerLock();
+            removeAllCardsFromTable();
+            placeCardsOnTable();
+            table.tokensLock.dealerUnlock();
         }
 
         for (int i = playerThreads.length - 1; i >= 0; i--)
@@ -105,6 +109,7 @@ public class Dealer implements Runnable {
             synchronized(setRequests){
                 checkSets();
             }
+            table.hints();
             updateTimerDisplay(false);
             
         }
@@ -137,11 +142,10 @@ public class Dealer implements Runnable {
      * @param slots: slots placements to remove cards from
      */
     private void removeCardsFromTable(List<Integer> slots) {
-        synchronized (table.playersTokens) {
-            for(int slot : slots) {
-                clearTokens(slot);
-                table.removeCard(slot);
-            }
+        List<Integer> slotsCopy = new ArrayList<Integer>(slots);
+        for(int slot : slotsCopy) {
+            clearTokens(slot);
+            table.removeCard(slot);
         }
     }
 
@@ -149,16 +153,14 @@ public class Dealer implements Runnable {
      * Check if any cards can be removed from the deck and placed on the table.
      */
     private void placeCardsOnTable() {
-        synchronized (table.playersTokens) {
-            if (env.DEBUG) System.out.println("Dealer locked playersTokens");
-            Random random = new Random();
-            for (int slot = 0; slot < table.slotToCard.length; slot++) {
-                if (table.slotToCard[slot] == null) {
-                    //clearTokens(slot);
-                    int chosenCardIndex = random.nextInt(deck.size());
-                    int chosenCard = deck.remove(chosenCardIndex);
-                    table.placeCard(chosenCard, slot);
-                }
+        if (env.DEBUG) System.out.println("Dealer locked playersTokens");
+        Random random = new Random();
+        for (int slot = 0; slot < table.slotToCard.length; slot++) {
+            if (table.slotToCard[slot] == null) {
+                clearTokens(slot);
+                int chosenCardIndex = random.nextInt(deck.size());
+                int chosenCard = deck.remove(chosenCardIndex);
+                table.placeCard(chosenCard, slot);
             }
         }
         if (env.DEBUG) System.out.println("Dealer released playersTokens");
@@ -171,7 +173,8 @@ public class Dealer implements Runnable {
     private void clearTokens(int slot){
         for (int id = 0; id < table.playersTokens.size(); id++) {
             ArrayList<Integer> playerTokens = table.playersTokens.get(id);
-            if (playerTokens.contains(slot)) table.toggleToken(id, slot);
+            if (playerTokens.contains(slot)) 
+                table.toggleToken(id, slot);
         }
     }
 
@@ -196,13 +199,11 @@ public class Dealer implements Runnable {
      * Returns all the cards from the table to the deck.
      */
     private void removeAllCardsFromTable() {
-        synchronized (table.playersTokens) {
-            for (int slot = 0; slot < table.slotToCard.length; slot++) {
-                if (table.slotToCard[slot] != null) {
-                    //clearTokens(slot);
-                    deck.add(table.slotToCard[slot]);
-                    table.removeCard(slot);
-                }
+        for (int slot = 0; slot < table.slotToCard.length; slot++) {
+            if (table.slotToCard[slot] != null) {
+                clearTokens(slot);
+                deck.add(table.slotToCard[slot]);
+                table.removeCard(slot);
             }
         }
     }
@@ -244,10 +245,12 @@ public class Dealer implements Runnable {
                     }
                     else if(env.util.testSet(chosenCards)){
                         player.point();
-                        synchronized (table.playersTokens) {
-                            removeCardsFromTable(tokenPlacements);
-                            placeCardsOnTable();
-                        }
+                        
+                        table.tokensLock.dealerLock();
+                        removeCardsFromTable(tokenPlacements);
+                        placeCardsOnTable();
+                        table.tokensLock.dealerUnlock();
+
                         penalizePlayer(requestPlayerId, env.config.pointFreezeMillis);
                     }
                     else {
