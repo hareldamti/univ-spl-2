@@ -6,7 +6,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+
+import javax.swing.UIDefaults.ActiveValue;
 
 /**
  * This class contains the data that is visible to the player.
@@ -34,6 +38,7 @@ public class Table {
      * Maintaining token placements for all the players
      */
     public ArrayList<ArrayList<Integer>> playersTokens;
+    public Semaphore tokensLock;
 
     /**
      * Constructor for testing.
@@ -47,6 +52,7 @@ public class Table {
         this.slotToCard = slotToCard;
         this.cardToSlot = cardToSlot;
         this.playersTokens = new ArrayList<ArrayList<Integer>>();
+        this.tokensLock = new Semaphore();
     }
 
     /**
@@ -120,23 +126,22 @@ public class Table {
 
     /**
      * Toggles token placement for a player.
+     * Assumes the function call is wrapped in the semaphore's lock. 
      * @param player - the player's id.
      * @param slot   - the slot on which to toggle the token.
      * @return       - whether 3 token are now placed and the dealer should be called.
      */
     public boolean toggleToken(int player, int slot){
         List<Integer> tokenPlacements;
-        synchronized(playersTokens) { tokenPlacements = playersTokens.get(player); }
-        synchronized(tokenPlacements) {
-            if (tokenPlacements.contains(slot)) {
-                tokenPlacements.remove(tokenPlacements.indexOf(slot));
-                removeToken(player, slot);
-            }
-            else if (tokenPlacements.size() < 3) {
-                tokenPlacements.add(slot);
-                placeToken(player, slot);
-                return tokenPlacements.size() == 3;
-            }
+        tokenPlacements = playersTokens.get(player);
+        if (tokenPlacements.contains(slot)) {
+            tokenPlacements.remove(tokenPlacements.indexOf(slot));
+            removeToken(player, slot);
+        }
+        else if (tokenPlacements.size() < 3) {
+            tokenPlacements.add(slot);
+            placeToken(player, slot);
+            if (tokenPlacements.size() == 3) return true;
         }
         return false;
     }
@@ -159,5 +164,22 @@ public class Table {
     public boolean removeToken(int player, int slot) {
         env.ui.removeToken(player, slot);
         return false;
+    }
+
+    /**
+     * Filters out the null cards from the table
+     * @return an integer array of cards that are on the table
+     */
+    public Integer[] getCardsOnTable(){
+        ArrayList<Integer> cards_ = new ArrayList<Integer>();
+        for(Integer slot: slotToCard){
+            if (slot == null) continue;
+            cards_.add(slot);
+        }
+        Integer[] cards = new Integer[cards_.size()];
+        for(int i = 0; i < cards.length; i++){
+            cards[i] = cards_.get(i);
+        }
+        return cards;
     }
 }

@@ -3,9 +3,13 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.List;
+import java.util.Random;
+import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.LinkedList;
-
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ArrayBlockingQueue;
 /**
  * This class manages the players' threads and data
  *
@@ -64,8 +68,12 @@ public class Player implements Runnable {
     /**
      * UI slot choises
      */
-    private Object pressedSlotLock;
-    private Integer pressedSlot;
+    private ArrayBlockingQueue<Integer> pressedSlots;
+
+    /**
+     * Required freeze time for the player.
+     */
+    public volatile AtomicLong penaltySec;
 
     /**
      * The class constructor.
@@ -81,9 +89,10 @@ public class Player implements Runnable {
         this.table = table;
         this.id = id;
         this.human = human;
-        this.pressedSlotLock = new Object();
+        this.pressedSlots = new ArrayBlockingQueue<Integer>(3);
         table.playersTokens.add(new ArrayList<Integer>(3));
         this.dealer = dealer;
+        this.penaltySec = new AtomicLong(0);
 
     }
 
@@ -92,19 +101,19 @@ public class Player implements Runnable {
      */
     @Override
     public void run() {
-        System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
+        env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
         playerThread = Thread.currentThread();
         if (!human) createArtificialIntelligence();
         while (!terminate) {
-            synchronized(pressedSlotLock){
-                while(pressedSlot == null)
-                    try{ pressedSlotLock.wait(); } catch (InterruptedException interrupted){ break; }
-                if (pressedSlot != null) toggleToken(pressedSlot);
-                pressedSlot = null;
+            synchronized(pressedSlots){
+                while(pressedSlots.isEmpty())
+                    try{ pressedSlots.wait(); } catch (InterruptedException interrupted){ break; }
+                if (!pressedSlots.isEmpty()) 
+                    toggleToken(pressedSlots.poll());
             }
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
-        System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
+        env.logger.info("Thread " + Thread.currentThread().getName() + " terminated.");
     }
 
     /**
@@ -114,14 +123,12 @@ public class Player implements Runnable {
     private void createArtificialIntelligence() {
         // note: this is a very very smart AI (!)
         aiThread = new Thread(() -> {
-            System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
+            env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
-                // TODO implement player key press simulator
-                try {
-                    synchronized (this) { wait(); }
-                } catch (InterruptedException ignored) {}
+                Random random = new Random();
+                toggleToken(random.nextInt(12));
             }
-            System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
+            env.logger.info("Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);
         aiThread.start();
     }
@@ -131,6 +138,7 @@ public class Player implements Runnable {
      */
     public void terminate() {
         terminate = true;
+        if (!human) aiThread.interrupt();
     }
 
     /**
@@ -139,11 +147,12 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        if(table.slotToCard[slot] != null){
-            synchronized(pressedSlotLock)
+        if (!human) return;
+        if(playerThread.getState() != State.TIMED_WAITING) {
+            synchronized(pressedSlots)
             {
-                pressedSlot = slot;
-                pressedSlotLock.notifyAll();
+                try {pressedSlots.add(slot);} catch (IllegalStateException ignored) {} 
+                pressedSlots.notifyAll();
             }
         }
     }
@@ -155,10 +164,15 @@ public class Player implements Runnable {
      * 
      */
     private void toggleToken(int slot) {
-        if (table.toggleToken(id, slot)) {
-            synchronized(this) {
-                dealer.addSetRequest(id);
-                try{ wait(); } catch (InterruptedException ignored) {}
+        if (table.tokensLock.playerTryLock()) {
+            boolean addRequest = table.toggleToken(id, slot);
+            table.tokensLock.playerUnlock();
+            if (addRequest) {
+                synchronized(this) {
+                    dealer.addSetRequest(id);
+                    try{ wait(); } catch (InterruptedException ignored) {}
+                    penalty();
+                }
             }
         }
     }
@@ -178,10 +192,23 @@ public class Player implements Runnable {
      * Penalize a player and perform other related actions.
      */
     public void penalty() {
-        // TODO implement
+        long requiredPenalty;
+        long resetPenalty = 0;
+        do {
+            requiredPenalty = penaltySec.get();
+        } while (!penaltySec.compareAndSet(requiredPenalty, resetPenalty));
+        if (requiredPenalty > 0) {
+            try {
+                for (long leftPenalty=requiredPenalty; leftPenalty>0; leftPenalty-=1000) {
+                    env.ui.setFreeze(id, leftPenalty);
+                    Thread.sleep(1000);
+                }
+                env.ui.setFreeze(id, 0);
+            } catch (InterruptedException ignored) {};
+        }
     }
 
-    public int getScore() {
+    public int score() {
         return score;
     }
 }

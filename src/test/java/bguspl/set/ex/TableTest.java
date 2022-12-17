@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -29,11 +30,12 @@ class TableTest {
         properties.put("TableDelaySeconds", "0");
         properties.put("PlayerKeys1", "81,87,69,82");
         properties.put("PlayerKeys2", "85,73,79,80");
-        Config config = new Config(properties);
+        MockLogger logger = new MockLogger();
+        Config config = new Config(logger, properties);
         slotToCard = new Integer[config.tableSize];
         cardToSlot = new Integer[config.deckSize];
 
-        Env env = new Env(config, new MockUserInterface(), new MockUtil());
+        Env env = new Env(logger, config, new MockUserInterface(), new MockUtil());
         table = new Table(env, slotToCard, cardToSlot);
     }
 
@@ -53,7 +55,7 @@ class TableTest {
         }
     }
 
-    private void placeSomeCardsAndAssert() {
+    private void placeSomeCardsAndAssert() throws InterruptedException {
         table.placeCard(8, 2);
 
         assertEquals(8, (int) slotToCard[2]);
@@ -81,19 +83,21 @@ class TableTest {
     }
 
     @Test
-    void placeCard_SomeSlotsAreFilled() {
+    void placeCard_SomeSlotsAreFilled() throws InterruptedException {
 
         fillSomeSlots();
         placeSomeCardsAndAssert();
     }
 
     @Test
-    void placeCard_AllSlotsAreFilled() {
+    void placeCard_AllSlotsAreFilled() throws InterruptedException {
         fillAllSlots();
         placeSomeCardsAndAssert();
     }
 
     static class MockUserInterface implements UserInterface {
+        @Override
+        public void dispose() {}
         @Override
         public void placeCard(int card, int slot) {}
         @Override
@@ -137,6 +141,15 @@ class TableTest {
         @Override
         public List<int[]> findSets(List<Integer> deck, int count) {
             return null;
+        }
+
+        @Override
+        public void spin() {}
+    }
+
+    static class MockLogger extends Logger {
+        protected MockLogger() {
+            super("", null);
         }
     }
 }
