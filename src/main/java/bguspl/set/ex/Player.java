@@ -126,24 +126,20 @@ public class Player implements Runnable {
         aiThread = new Thread(() -> {
             System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
             while (!terminate) {
-                // TODO implement player key press simulator
-                try {
-                    Random random = new Random();
-                    toggleToken(random.nextInt(12));
-                    synchronized (this) { wait(10); }
-                } catch (InterruptedException ignored) {}
+                Random random = new Random();
+                toggleToken(random.nextInt(12));
             }
             System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
         }, "computer-" + id);
         aiThread.start();
     }
 
-
     /**
      * Called when the game should be terminated due to an external event.
      */
     public void terminate() {
         terminate = true;
+        if (!human) aiThread.interrupt();
     }
 
     /**

@@ -71,6 +71,7 @@ public class Dealer implements Runnable {
     public void run() {
         System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
         System.out.println("Info: creating players threads...\n");
+        
         for (int i=0; i < players.length; i++) {
             playerThreads[i] = new Thread(this.players[i]);
             playerThreads[i].start();
@@ -83,12 +84,16 @@ public class Dealer implements Runnable {
         while (!shouldFinish()) {
             timerLoop();
             updateTimerDisplay(false);
-
-            table.tokensLock.dealerLock();
-            removeAllCardsFromTable();
-            placeCardsOnTable();
-            table.tokensLock.dealerUnlock();
+            // i.e if mod = timed rounds
+            if (env.config.turnTimeoutMillis > 0) {
+                table.tokensLock.dealerLock();
+                removeAllCardsFromTable();
+                placeCardsOnTable();
+                table.tokensLock.dealerUnlock();
+            }
         }
+
+        terminate();
 
         for (int i = playerThreads.length - 1; i >= 0; i--)
             try{ playerThreads[i].join(); } catch (InterruptedException ignored) {}
@@ -102,16 +107,37 @@ public class Dealer implements Runnable {
      */
     private void timerLoop() {
         timerStart = System.currentTimeMillis();
-        reshuffleTime = timerStart + env.config.turnTimeoutMillis;
-        while (!terminate && System.currentTimeMillis() < reshuffleTime) {
-            sleepUntilWokenOrTimeout();
-            //checking if we woke up because of players' notify
-            synchronized(setRequests){
-                checkSets();
+        reshuffleTime = timerStart + env.config.turnTimeoutMillis + 1000;
+        
+        if (env.config.turnTimeoutMillis > 0) {
+            while (!terminate && System.currentTimeMillis() < reshuffleTime) {
+                sleepUntilWokenOrTimeout();
+                updateTimerDisplay(false);
+                synchronized(setRequests){
+                    checkSets();
+                }
             }
-            table.hints();
-            updateTimerDisplay(false);
-            
+        }
+        else {
+            while(!shouldFinish()) {
+                sleepUntilWokenOrTimeout();
+                boolean reset = false;
+                synchronized(setRequests){
+                    reset = checkSets();
+                }
+                boolean noSetsAvailable = env.util.findSets(
+                    Arrays.stream(table.getCardsOnTable()).collect(Collectors.toList()), 1
+                    ).size() == 0;
+
+                if(noSetsAvailable){
+                    table.tokensLock.dealerLock();
+                    removeAllCardsFromTable();
+                    placeCardsOnTable();
+                    table.tokensLock.dealerUnlock();
+                }
+                reset = reset || noSetsAvailable;
+                if (env.config.turnTimeoutMillis == 0) updateTimerDisplay(reset);
+            }
         }
     }
 
@@ -124,7 +150,6 @@ public class Dealer implements Runnable {
                 playerThreads[i].interrupt();
         }
         terminate = true;
-
     }
 
     /**
@@ -133,8 +158,13 @@ public class Dealer implements Runnable {
      * @return true iff the game should be finished.
      */
     private boolean shouldFinish() {
-        return terminate || env.util.findSets(deck, 1).size() == 0;
+        List<Integer> fullDeck = new ArrayList<Integer>(deck);
+        for(int i = 0; i < env.config.rows * env.config.columns; i++)
+            if(table.slotToCard[i] != null) 
+                fullDeck.add(table.slotToCard[i]);
+        return terminate || env.util.findSets(fullDeck, 1).size() == 0;
     }
+    
 
     /**
      * Removes specific cards from the table and discards them.
@@ -153,17 +183,17 @@ public class Dealer implements Runnable {
      * Check if any cards can be removed from the deck and placed on the table.
      */
     private void placeCardsOnTable() {
-        if (env.DEBUG) System.out.println("Dealer locked playersTokens");
         Random random = new Random();
         for (int slot = 0; slot < table.slotToCard.length; slot++) {
             if (table.slotToCard[slot] == null) {
                 clearTokens(slot);
-                int chosenCardIndex = random.nextInt(deck.size());
-                int chosenCard = deck.remove(chosenCardIndex);
-                table.placeCard(chosenCard, slot);
+                if (deck.size() > 0) {
+                    int chosenCardIndex = random.nextInt(deck.size());
+                    int chosenCard = deck.remove(chosenCardIndex);
+                    table.placeCard(chosenCard, slot);
+                }
             }
         }
-        if (env.DEBUG) System.out.println("Dealer released playersTokens");
     }
 
     /**
@@ -183,16 +213,32 @@ public class Dealer implements Runnable {
      */
     private void sleepUntilWokenOrTimeout() {
         long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
-        synchronized (setRequests) { try {setRequests.wait(extraMillis);} catch (InterruptedException ignored) {} }
+        if (env.config.turnTimeoutMillis > 0) {
+            long countdown = (reshuffleTime - System.currentTimeMillis() - 1);
+            boolean warn = countdown < env.config.turnTimeoutWarningMillis;
+            if (warn) extraMillis = 10 + (timerStart - System.currentTimeMillis()) % 10;
+            synchronized (setRequests) { try {setRequests.wait(extraMillis);} catch (InterruptedException ignored) {} }
+        }
+        else if (env.config.turnTimeoutMillis == 0) 
+            synchronized (setRequests) { try {setRequests.wait(extraMillis);} catch (InterruptedException ignored) {} }
+        else
+            synchronized (setRequests) { try {setRequests.wait();} catch (InterruptedException ignored) {} }
+        
     }
 
     /**
      * Reset and/or update the countdown and the countdown display.
      */
     private void updateTimerDisplay(boolean reset) {
-        long countdown = (reshuffleTime - System.currentTimeMillis() + 999) / 1000 * 1000;
-        boolean warn = countdown < env.config.turnTimeoutWarningMillis;
-        env.ui.setCountdown(countdown, warn);
+        if(env.config.turnTimeoutMillis > 0) {
+            long countdown = (reshuffleTime - System.currentTimeMillis() - 1);
+            boolean warn = countdown < env.config.turnTimeoutWarningMillis;
+            env.ui.setCountdown(countdown, warn);
+        }
+        else {
+            if (reset) timerStart = System.currentTimeMillis();
+            env.ui.setElapsed(System.currentTimeMillis() - timerStart);
+        }
     }
 
     /**
@@ -211,7 +257,7 @@ public class Dealer implements Runnable {
     /**
      * Used by the players to add themselves to the dealer request queue
      * 
-     * @param playerId
+     * @param playerId: requesting player
      */
     public void addSetRequest(int playerId){
         synchronized (setRequests) {
@@ -221,11 +267,12 @@ public class Dealer implements Runnable {
     }
 
     /**
-     * Iterates through the check list to decide if a legal set was declared
-     * 
+     * Handles set requests from players
+     * @return:  wether a legal set was found among the requests
      */
-    private void checkSets(){
+    private boolean checkSets(){
         Integer requestPlayerId;
+        boolean foundSets = false;
         do {
             synchronized (setRequests) {
                 requestPlayerId = setRequests.pollFirst();
@@ -252,6 +299,7 @@ public class Dealer implements Runnable {
                         table.tokensLock.dealerUnlock();
 
                         penalizePlayer(requestPlayerId, env.config.pointFreezeMillis);
+                        foundSets = true;
                     }
                     else {
                         penalizePlayer(requestPlayerId, env.config.penaltyFreezeMillis);
@@ -261,12 +309,14 @@ public class Dealer implements Runnable {
             }
         }
         while (requestPlayerId != null);
+        return foundSets;
     }
 
     /**
+     * Set the player's penalty field to the required duration
      * 
-     * @param id
-     * @param penalty
+     * @param id:      player's id
+     * @param penalty  player's penalty
      */
     void penalizePlayer(int id, long penalty) {
         Player player = players[id];
@@ -281,6 +331,20 @@ public class Dealer implements Runnable {
      * Check who is/are the winner/s and displays them.
      */
     private void announceWinners() {
-        // TODO implement
+        ArrayList<Integer> scores = new ArrayList<Integer>();
+        int currentMax = 0;
+        for(int i = 0; i < players.length; i++){
+            if(players[i].getScore() > currentMax) {
+                scores = new ArrayList<Integer>();
+                scores.add(i);
+                currentMax = players[i].getScore();
+            }
+            else if(players[i].getScore() == currentMax) scores.add(i);
+        }
+        int[] winners = new int[scores.size()];
+        for(int i = 0; i < winners.length; i++)
+            winners[i] = scores.get(i);
+
+        env.ui.announceWinner(winners);
     }
 }

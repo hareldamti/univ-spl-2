@@ -165,4 +165,21 @@ public class Table {
         env.ui.removeToken(player, slot);
         return false;
     }
+
+    /**
+     * Filters out the null cards from the table
+     * @return an integer array of cards that are on the table
+     */
+    public Integer[] getCardsOnTable(){
+        ArrayList<Integer> cards_ = new ArrayList<Integer>();
+        for(Integer slot: slotToCard){
+            if (slot == null) continue;
+            cards_.add(slot);
+        }
+        Integer[] cards = new Integer[cards_.size()];
+        for(int i = 0; i < cards.length; i++){
+            cards[i] = cards_.get(i);
+        }
+        return cards;
+    }
 }
