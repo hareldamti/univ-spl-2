@@ -147,7 +147,7 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-
+        if (!human) return;
         if(playerThread.getState() != State.TIMED_WAITING) {
             synchronized(pressedSlots)
             {

@@ -27,9 +27,8 @@ public class Semaphore {
     }
     public void dealerLock() {
         dealerState.set(-1);
-        synchronized(dealerLock) {
         while (activePlayers.get() > 0) {
-            try {dealerLock.wait();} catch (InterruptedException ignored) {};}
+            synchronized(dealerLock) {try {dealerLock.wait(10);} catch (InterruptedException ignored) {};}
         }
         dealerState.set(1);
     }
