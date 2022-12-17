@@ -69,8 +69,7 @@ public class Dealer implements Runnable {
      */
     @Override
     public void run() {
-        System.out.printf("Info: Thread %s starting.%n", Thread.currentThread().getName());
-        System.out.println("Info: creating players threads...\n");
+        env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
         
         for (int i=0; i < players.length; i++) {
             playerThreads[i] = new Thread(this.players[i]);
@@ -92,14 +91,13 @@ public class Dealer implements Runnable {
                 table.tokensLock.dealerUnlock();
             }
         }
-
         terminate();
 
         for (int i = playerThreads.length - 1; i >= 0; i--)
             try{ playerThreads[i].join(); } catch (InterruptedException ignored) {}
 
         announceWinners();
-        System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
+        env.logger.info("Thread " + Thread.currentThread().getName() + " terminated.");
     }
 
     /**
@@ -120,11 +118,13 @@ public class Dealer implements Runnable {
         }
         else {
             while(!shouldFinish()) {
-                sleepUntilWokenOrTimeout();
                 boolean reset = false;
                 synchronized(setRequests){
+                    if (setRequests.size() == 0)
+                        sleepUntilWokenOrTimeout();
                     reset = checkSets();
                 }
+                
                 boolean noSetsAvailable = env.util.findSets(
                     Arrays.stream(table.getCardsOnTable()).collect(Collectors.toList()), 1
                     ).size() == 0;
@@ -217,12 +217,9 @@ public class Dealer implements Runnable {
             long countdown = (reshuffleTime - System.currentTimeMillis() - 1);
             boolean warn = countdown < env.config.turnTimeoutWarningMillis;
             if (warn) extraMillis = 10 + (timerStart - System.currentTimeMillis()) % 10;
-            synchronized (setRequests) { try {setRequests.wait(extraMillis);} catch (InterruptedException ignored) {} }
         }
-        else if (env.config.turnTimeoutMillis == 0) 
-            synchronized (setRequests) { try {setRequests.wait(extraMillis);} catch (InterruptedException ignored) {} }
-        else
-            synchronized (setRequests) { try {setRequests.wait();} catch (InterruptedException ignored) {} }
+        if (env.config.turnTimeoutMillis < 0) extraMillis = 0;
+        synchronized (setRequests) { try {setRequests.wait(extraMillis);} catch (InterruptedException ignored) {} }
         
     }
 
@@ -286,7 +283,8 @@ public class Dealer implements Runnable {
                     boolean illegalSet = tokenPlacements.size() < 3;
                     for (int i = 0; !illegalSet && i < tokenPlacements.size(); i++){
                         illegalSet = table.slotToCard[tokenPlacements.get(i)] == null;
-                        chosenCards[i] = table.slotToCard[tokenPlacements.get(i)];
+                        if (!illegalSet)
+                            chosenCards[i] = table.slotToCard[tokenPlacements.get(i)];
                     }
                     if (illegalSet) {
                     }
@@ -334,12 +332,12 @@ public class Dealer implements Runnable {
         ArrayList<Integer> scores = new ArrayList<Integer>();
         int currentMax = 0;
         for(int i = 0; i < players.length; i++){
-            if(players[i].getScore() > currentMax) {
+            if(players[i].score() > currentMax) {
                 scores = new ArrayList<Integer>();
                 scores.add(i);
-                currentMax = players[i].getScore();
+                currentMax = players[i].score();
             }
-            else if(players[i].getScore() == currentMax) scores.add(i);
+            else if(players[i].score() == currentMax) scores.add(i);
         }
         int[] winners = new int[scores.size()];
         for(int i = 0; i < winners.length; i++)
