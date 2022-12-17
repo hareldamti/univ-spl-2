@@ -5,7 +5,7 @@ import bguspl.set.Env;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.LinkedList;
-
+import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class manages the players' threads and data
  *
@@ -68,6 +68,11 @@ public class Player implements Runnable {
     private Integer pressedSlot;
 
     /**
+     * Required freeze time for the player.
+     */
+    public volatile AtomicInteger penaltySec;
+
+    /**
      * The class constructor.
      *
      * @param env    - the environment object.
@@ -96,6 +101,7 @@ public class Player implements Runnable {
         playerThread = Thread.currentThread();
         if (!human) createArtificialIntelligence();
         while (!terminate) {
+            penalty();
             synchronized(pressedSlotLock){
                 while(pressedSlot == null)
                     try{ pressedSlotLock.wait(); } catch (InterruptedException interrupted){ break; }
@@ -125,6 +131,7 @@ public class Player implements Runnable {
         }, "computer-" + id);
         aiThread.start();
     }
+
 
     /**
      * Called when the game should be terminated due to an external event.
@@ -178,7 +185,18 @@ public class Player implements Runnable {
      * Penalize a player and perform other related actions.
      */
     public void penalty() {
-        // TODO implement
+        int requiredPenalty;
+        int resetPenalty = 0;
+        do {
+            requiredPenalty = penaltySec.get();
+        } while (!penaltySec.compareAndSet(requiredPenalty, resetPenalty));
+        if (requiredPenalty > 0) {
+        try {
+            for (int leftPenalty=requiredPenalty; leftPenalty>=0; leftPenalty--)
+            env.ui.setFreeze(id, leftPenalty * 1000);
+            Thread.sleep(1000);
+        } catch (InterruptedException ignored) {};
+        }
     }
 
     public int getScore() {
