@@ -1,7 +1,5 @@
 package bguspl.set;
 
-import bguspl.set.ex.Dealer;
-
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 
@@ -10,21 +8,6 @@ import java.awt.event.WindowListener;
  */
 public class WindowManager implements WindowListener {
 
-    /**
-     * The main thread.
-     */
-    private final Thread mainThread;
-
-    /**
-     * The dealer object.
-     */
-    private final Dealer dealer;
-
-    public WindowManager(Dealer dealer) {
-        mainThread = Thread.currentThread();
-        this.dealer = dealer;
-    }
-
     @Override
     public void windowOpened(WindowEvent e) {
         // Auto-generated method stub
@@ -32,9 +15,7 @@ public class WindowManager implements WindowListener {
 
     @Override
     public void windowClosing(WindowEvent e) {
-        dealer.terminate();
-        try { mainThread.join(); } catch (InterruptedException ignored) {}
-        System.out.println("Info: Thanks for playing... it was fun!");
+        Main.xButtonPressed();
     }
 
     @Override
