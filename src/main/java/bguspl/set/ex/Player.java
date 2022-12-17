@@ -3,9 +3,10 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.List;
+import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 /**
  * This class manages the players' threads and data
  *
@@ -70,7 +71,7 @@ public class Player implements Runnable {
     /**
      * Required freeze time for the player.
      */
-    public volatile AtomicInteger penaltySec;
+    public volatile AtomicLong penaltySec;
 
     /**
      * The class constructor.
@@ -89,6 +90,7 @@ public class Player implements Runnable {
         this.pressedSlotLock = new Object();
         table.playersTokens.add(new ArrayList<Integer>(3));
         this.dealer = dealer;
+        this.penaltySec = new AtomicLong(0);
 
     }
 
@@ -101,7 +103,6 @@ public class Player implements Runnable {
         playerThread = Thread.currentThread();
         if (!human) createArtificialIntelligence();
         while (!terminate) {
-            penalty();
             synchronized(pressedSlotLock){
                 while(pressedSlot == null)
                     try{ pressedSlotLock.wait(); } catch (InterruptedException interrupted){ break; }
@@ -146,7 +147,7 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        if(table.slotToCard[slot] != null){
+        if(playerThread.getState() != State.TIMED_WAITING){
             synchronized(pressedSlotLock)
             {
                 pressedSlot = slot;
@@ -166,6 +167,7 @@ public class Player implements Runnable {
             synchronized(this) {
                 dealer.addSetRequest(id);
                 try{ wait(); } catch (InterruptedException ignored) {}
+                penalty();
             }
         }
     }
@@ -185,17 +187,18 @@ public class Player implements Runnable {
      * Penalize a player and perform other related actions.
      */
     public void penalty() {
-        int requiredPenalty;
-        int resetPenalty = 0;
+        long requiredPenalty;
+        long resetPenalty = 0;
         do {
             requiredPenalty = penaltySec.get();
         } while (!penaltySec.compareAndSet(requiredPenalty, resetPenalty));
         if (requiredPenalty > 0) {
-        try {
-            for (int leftPenalty=requiredPenalty; leftPenalty>=0; leftPenalty--)
-            env.ui.setFreeze(id, leftPenalty * 1000);
-            Thread.sleep(1000);
-        } catch (InterruptedException ignored) {};
+            try {
+                for (long leftPenalty=requiredPenalty; leftPenalty>=0; leftPenalty-=1000) {
+                    env.ui.setFreeze(id, leftPenalty);
+                    Thread.sleep(1000);
+                }
+            } catch (InterruptedException ignored) {};
         }
     }
 

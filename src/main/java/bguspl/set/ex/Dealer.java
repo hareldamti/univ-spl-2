@@ -75,12 +75,15 @@ public class Dealer implements Runnable {
             playerThreads[i] = new Thread(this.players[i]);
             playerThreads[i].start();
         }
+        synchronized (table.playersTokens) {placeCardsOnTable();}
         
         while (!shouldFinish()) {
-            placeCardsOnTable();
             timerLoop();
             updateTimerDisplay(false);
-            removeAllCardsFromTable();
+            synchronized (table.playersTokens) {
+                removeAllCardsFromTable();
+                placeCardsOnTable();
+            }
         }
 
         for (int i = playerThreads.length - 1; i >= 0; i--)
@@ -102,7 +105,6 @@ public class Dealer implements Runnable {
             synchronized(setRequests){
                 checkSets();
             }
-            placeCardsOnTable();
             updateTimerDisplay(false);
             
         }
@@ -130,10 +132,17 @@ public class Dealer implements Runnable {
     }
 
     /**
-     * Checks if any cards should be removed from the table and returns them to the deck.
+     * Removes specific cards from the table and discards them.
+     * 
+     * @param slots: slots placements to remove cards from
      */
-    private void removeCardsFromTable() {
-        // TODO implement
+    private void removeCardsFromTable(List<Integer> slots) {
+        synchronized (table.playersTokens) {
+            for(int slot : slots) {
+                clearTokens(slot);
+                table.removeCard(slot);
+            }
+        }
     }
 
     /**
@@ -141,20 +150,28 @@ public class Dealer implements Runnable {
      */
     private void placeCardsOnTable() {
         synchronized (table.playersTokens) {
+            if (env.DEBUG) System.out.println("Dealer locked playersTokens");
             Random random = new Random();
             for (int slot = 0; slot < table.slotToCard.length; slot++) {
                 if (table.slotToCard[slot] == null) {
-                    synchronized (table.playersTokens) {
-                        for (int id = 0; id < table.playersTokens.size(); id++) {
-                            ArrayList<Integer> playerTokens = table.playersTokens.get(id);
-                            if (playerTokens.contains(slot)) table.toggleToken(id, slot);
-                        }
-                    }
+                    //clearTokens(slot);
                     int chosenCardIndex = random.nextInt(deck.size());
                     int chosenCard = deck.remove(chosenCardIndex);
                     table.placeCard(chosenCard, slot);
                 }
             }
+        }
+        if (env.DEBUG) System.out.println("Dealer released playersTokens");
+    }
+
+    /**
+     * Clears any token placements from a specific slot
+     * @param slot: The slot to remove tokens from
+     */
+    private void clearTokens(int slot){
+        for (int id = 0; id < table.playersTokens.size(); id++) {
+            ArrayList<Integer> playerTokens = table.playersTokens.get(id);
+            if (playerTokens.contains(slot)) table.toggleToken(id, slot);
         }
     }
 
@@ -164,12 +181,6 @@ public class Dealer implements Runnable {
     private void sleepUntilWokenOrTimeout() {
         long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
         synchronized (setRequests) { try {setRequests.wait(extraMillis);} catch (InterruptedException ignored) {} }
-
-        if (env.DEBUG) {
-            for (Thread playerThread : playerThreads) {
-                //System.out.printf("%s: %s\n",playerThread.getName(),playerThread.getState());
-            }
-        }
     }
 
     /**
@@ -186,11 +197,9 @@ public class Dealer implements Runnable {
      */
     private void removeAllCardsFromTable() {
         synchronized (table.playersTokens) {
-            for (ArrayList<Integer> playerTokens : table.playersTokens) {
-                //TODO: remove all tokens
-            }
             for (int slot = 0; slot < table.slotToCard.length; slot++) {
                 if (table.slotToCard[slot] != null) {
+                    //clearTokens(slot);
                     deck.add(table.slotToCard[slot]);
                     table.removeCard(slot);
                 }
@@ -226,32 +235,25 @@ public class Dealer implements Runnable {
                 synchronized(table.playersTokens) { tokenPlacements = table.playersTokens.get(requestPlayerId); }
                 synchronized(tokenPlacements) {
                     int[] chosenCards = new int[tokenPlacements.size()];
-                    boolean nullInSet = false;
-                    for (int i = 0; i < tokenPlacements.size(); i++){
-                        nullInSet = table.slotToCard[tokenPlacements.get(i)] == null;
-                        if (nullInSet) break;
+                    boolean illegalSet = tokenPlacements.size() < 3;
+                    for (int i = 0; !illegalSet && i < tokenPlacements.size(); i++){
+                        illegalSet = table.slotToCard[tokenPlacements.get(i)] == null;
                         chosenCards[i] = table.slotToCard[tokenPlacements.get(i)];
                     }
-                
-                    if (nullInSet) {
-                        //TODO: handle
+                    if (illegalSet) {
                     }
-
                     else if(env.util.testSet(chosenCards)){
                         player.point();
-                        if(env.DEBUG) System.out.println("set found\n");
-
-                        //TODO add low penalty
-                        //TODO clear player tokenList
-                        //TODO clear set from table and place new cards
+                        synchronized (table.playersTokens) {
+                            removeCardsFromTable(tokenPlacements);
+                            placeCardsOnTable();
+                        }
+                        penalizePlayer(requestPlayerId, env.config.pointFreezeMillis);
                     }
-
                     else {
-                        if(env.DEBUG) System.out.println("set not found\n");
-                        //TODO add heavy penalty
+                        penalizePlayer(requestPlayerId, env.config.penaltyFreezeMillis);
                     }
                     synchronized (player) { player.notifyAll(); }
-                    
                 }
             }
         }
@@ -260,7 +262,16 @@ public class Dealer implements Runnable {
 
     /**
      * 
+     * @param id
+     * @param penalty
      */
+    void penalizePlayer(int id, long penalty) {
+        Player player = players[id];
+        long currentPenalty;
+        do {
+            currentPenalty = player.penaltySec.get();
+        } while(!player.penaltySec.compareAndSet(currentPenalty, penalty));
+    }
 
 
     /**

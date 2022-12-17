@@ -126,7 +126,9 @@ public class Table {
      */
     public boolean toggleToken(int player, int slot){
         List<Integer> tokenPlacements;
-        synchronized(playersTokens) { tokenPlacements = playersTokens.get(player); }
+        synchronized(playersTokens) { 
+            if (env.DEBUG) System.out.printf("player %s got access to playersTokens\n", player);
+            tokenPlacements = playersTokens.get(player); }
         synchronized(tokenPlacements) {
             if (tokenPlacements.contains(slot)) {
                 tokenPlacements.remove(tokenPlacements.indexOf(slot));
