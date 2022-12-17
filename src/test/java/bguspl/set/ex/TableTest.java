@@ -7,6 +7,7 @@ import bguspl.set.Util;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Logger;
@@ -30,6 +31,7 @@ class TableTest {
         properties.put("TableDelaySeconds", "0");
         properties.put("PlayerKeys1", "81,87,69,82");
         properties.put("PlayerKeys2", "85,73,79,80");
+
         MockLogger logger = new MockLogger();
         Config config = new Config(logger, properties);
         slotToCard = new Integer[config.tableSize];
@@ -37,6 +39,8 @@ class TableTest {
 
         Env env = new Env(logger, config, new MockUserInterface(), new MockUtil());
         table = new Table(env, slotToCard, cardToSlot);
+        for (int i=0; i<5; i++)
+            table.playersTokens.add(new ArrayList<Integer>());
     }
 
     private int fillSomeSlots() {
@@ -64,13 +68,11 @@ class TableTest {
 
     @Test
     void countCards_NoSlotsAreFilled() {
-
         assertEquals(0, table.countCards());
     }
 
     @Test
     void countCards_SomeSlotsAreFilled() {
-
         int slotsFilled = fillSomeSlots();
         assertEquals(slotsFilled, table.countCards());
     }
@@ -93,6 +95,27 @@ class TableTest {
     void placeCard_AllSlotsAreFilled() throws InterruptedException {
         fillAllSlots();
         placeSomeCardsAndAssert();
+    }
+
+    @Test
+    void placeToken_TokenPlacementsEmpty() {
+        table.toggleToken(1,2);
+        table.toggleToken(1,3);
+        table.toggleToken(2,3);
+        table.toggleToken(2,0);
+        assertEquals(table.playersTokens.get(1).size(), 2);
+        assertEquals(table.playersTokens.get(2).size(), 2);
+        assertEquals(table.playersTokens.get(3).size(), 0);
+    }
+
+    @Test
+    void toggleTokens_RemoveSome() {
+        table.toggleToken(1,2);
+        table.toggleToken(1,2);
+        table.toggleToken(2,3);
+        table.toggleToken(2,0);
+        assertEquals(table.playersTokens.get(1).size(), 0);
+        assertEquals(table.playersTokens.get(2).size(), 2);
     }
 
     static class MockUserInterface implements UserInterface {

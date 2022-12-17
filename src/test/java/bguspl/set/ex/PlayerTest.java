@@ -11,6 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.Field;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,7 +45,7 @@ class PlayerTest {
     void setUp() {
         // purposely do not find the configuration files (use defaults here).
         Env env = new Env(logger, new Config(logger, ""), ui, util);
-        player = new Player(env, dealer, table, 0, false);
+        player = new Player(env, dealer, table, 0, true);
         assertInvariants();
     }
 
@@ -70,4 +72,33 @@ class PlayerTest {
         // check that ui.setScore was called with the player's id and the correct score
         verify(ui).setScore(eq(player.id), eq(expectedScore));
     }
+
+    @Test
+    void penalizeSelfForASec() {
+        player.penaltySec.set(1);
+        player.penalty();
+        assertEquals(player.penaltySec.get(),0);
+        verify(ui).setFreeze(eq(player.id), eq((long)1));
+        verify(ui).setFreeze(eq(player.id), eq((long)0));
+    }
+
+    @Test
+    void AddKeypressToPressQueue() {
+        // To set playerThread as currentThread
+        player.terminate();
+        player.run();
+
+        player.keyPressed(5);
+        player.keyPressed(3);
+        player.keyPressed(2);
+        player.keyPressed(4);
+
+        ArrayBlockingQueue<Integer> p = player.getPressedSlots();
+        assertEquals(5,p.poll());
+        assertEquals(3,p.poll());
+        assertEquals(2,p.poll());
+        assertTrue(p.isEmpty());
+    }
+
+
 }

@@ -18,6 +18,8 @@ import javax.swing.tree.TreeNode;
 
 /**
  * This class manages the dealer's threads and data
+ *
+ * @inv setRequests.size() <= players.length
  */
 public class Dealer implements Runnable {
 
@@ -52,6 +54,9 @@ public class Dealer implements Runnable {
      */
     private long reshuffleTime = Long.MAX_VALUE;
 
+    /**
+     * A queue of pending set requests from players
+     */
     private ArrayDeque<Integer> setRequests;
 
     public Dealer(Env env, Table table, Player[] players) {
@@ -344,5 +349,21 @@ public class Dealer implements Runnable {
             winners[i] = scores.get(i);
 
         env.ui.announceWinner(winners);
+    }
+
+    /**
+     * setRequests getter. for testing
+     * @return setRequests
+     */
+    public ArrayDeque<Integer> getSetRequests() {
+        return setRequests;
+    }
+
+    /**
+     * players getter. for testing
+     * @return players
+     */
+    public Player[] getPlayers() {
+        return players;
     }
 }

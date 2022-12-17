@@ -16,6 +16,8 @@ import javax.swing.UIDefaults.ActiveValue;
  * This class contains the data that is visible to the player.
  *
  * @inv slotToCard[x] == y iff cardToSlot[y] == x
+ * @inv 3 >= playerTokens.size() >= for playerTokens in playersTokens
+ *
  */
 public class Table {
 

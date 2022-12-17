@@ -2,11 +2,8 @@ package bguspl.set.ex;
 
 import bguspl.set.Env;
 
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.lang.Thread.State;
-import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -15,7 +12,8 @@ import java.util.concurrent.ArrayBlockingQueue;
  *
  * @inv id >= 0
  * @inv score >= 0
- * @inv 3 >= tokenPlacements.size() >= 0
+ * @inv 3 >= pressedSlots.size() >= 0
+ * @inv penaltySec >= 0
  */
 public class Player implements Runnable {
 
@@ -90,7 +88,8 @@ public class Player implements Runnable {
         this.id = id;
         this.human = human;
         this.pressedSlots = new ArrayBlockingQueue<Integer>(3);
-        table.playersTokens.add(new ArrayList<Integer>(3));
+        if (table != null && table.playersTokens != null)
+            table.playersTokens.add(new ArrayList<Integer>(3));
         this.dealer = dealer;
         this.penaltySec = new AtomicLong(0);
 
@@ -206,6 +205,14 @@ public class Player implements Runnable {
                 env.ui.setFreeze(id, 0);
             } catch (InterruptedException ignored) {};
         }
+    }
+
+    /**
+     * pressedSlots getter. for testing
+     * @return pressedSlots
+     */
+    public ArrayBlockingQueue<Integer> getPressedSlots(){
+        return this.pressedSlots;
     }
 
     public int score() {
