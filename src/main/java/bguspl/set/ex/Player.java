@@ -3,6 +3,7 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.List;
+import java.util.Random;
 import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -127,7 +128,9 @@ public class Player implements Runnable {
             while (!terminate) {
                 // TODO implement player key press simulator
                 try {
-                    synchronized (this) { wait(); }
+                    Random random = new Random();
+                    toggleToken(random.nextInt(12));
+                    synchronized (this) { wait(10); }
                 } catch (InterruptedException ignored) {}
             }
             System.out.printf("Info: Thread %s terminated.%n", Thread.currentThread().getName());
@@ -201,10 +204,11 @@ public class Player implements Runnable {
         } while (!penaltySec.compareAndSet(requiredPenalty, resetPenalty));
         if (requiredPenalty > 0) {
             try {
-                for (long leftPenalty=requiredPenalty; leftPenalty>=0; leftPenalty-=1000) {
+                for (long leftPenalty=requiredPenalty; leftPenalty>0; leftPenalty-=1000) {
                     env.ui.setFreeze(id, leftPenalty);
                     Thread.sleep(1000);
                 }
+                env.ui.setFreeze(id, 0);
             } catch (InterruptedException ignored) {};
         }
     }
