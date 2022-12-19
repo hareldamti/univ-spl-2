@@ -123,6 +123,12 @@ public class Player implements Runnable {
         // note: this is a very very smart AI (!)
         aiThread = new Thread(() -> {
             env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
             while (!terminate) {
                 Random random = new Random();
                 toggleToken(random.nextInt(12));
@@ -164,6 +170,10 @@ public class Player implements Runnable {
      */
     private void toggleToken(int slot) {
         if (table.tokensLock.playerTryLock()) {
+            if(table.slotToCard[slot] == null){
+                table.tokensLock.playerUnlock();
+                return;    
+            }
             boolean addRequest = table.toggleToken(id, slot);
             table.tokensLock.playerUnlock();
             if (addRequest) {
@@ -206,16 +216,32 @@ public class Player implements Runnable {
             } catch (InterruptedException ignored) {};
         }
     }
+    public int score() {
+        return score;
+    }
 
     /**
-     * pressedSlots getter. for testing
+     * for testing- pressedSlots getter.
      * @return pressedSlots
      */
     public ArrayBlockingQueue<Integer> getPressedSlots(){
         return this.pressedSlots;
     }
 
-    public int score() {
-        return score;
+    /**
+     * for testing- sets a player's score to a certain number.
+     * @param score
+     */
+    public void setScore(int score){
+        this.score = score;
     }
+
+    /**
+     * For testing- returns the value of the field terminate
+     * @return true iff terminate = true
+     */
+    public boolean getTerminationState(){
+        return terminate;
+    }
+    
 }

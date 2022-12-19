@@ -6,10 +6,12 @@ import bguspl.set.UtilImpl;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Vector;
 import java.util.Locale.Category;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -33,7 +35,7 @@ public class Dealer implements Runnable {
      */
     private final Table table;
     private final Player[] players;
-    private Thread[] playerThreads;
+    Thread[] playerThreads;
     /**
      * Utils
      */
@@ -96,6 +98,11 @@ public class Dealer implements Runnable {
                 table.tokensLock.dealerUnlock();
             }
         }
+
+        table.tokensLock.dealerLock();  
+        removeAllCardsFromTable();
+        table.tokensLock.dealerUnlock();
+        
         terminate();
 
         for (int i = playerThreads.length - 1; i >= 0; i--)
@@ -117,7 +124,11 @@ public class Dealer implements Runnable {
                 sleepUntilWokenOrTimeout();
                 updateTimerDisplay(false);
                 synchronized(setRequests){
-                    checkSets();
+                    if(checkSets()){
+                        timerStart = System.currentTimeMillis();
+                        reshuffleTime = timerStart + env.config.turnTimeoutMillis + 1000;
+                        updateTimerDisplay(false);
+                    }
                 }
             }
         }
@@ -188,8 +199,15 @@ public class Dealer implements Runnable {
      * Check if any cards can be removed from the deck and placed on the table.
      */
     private void placeCardsOnTable() {
+        
+        Vector<Integer> placementOrder = new Vector<>();
+        for(int i = 0; i < env.config.rows*env.config.columns; i++){
+            placementOrder.add(i);
+        }
+        Collections.shuffle(placementOrder);
+
         Random random = new Random();
-        for (int slot = 0; slot < table.slotToCard.length; slot++) {
+        for (int slot : placementOrder) {
             if (table.slotToCard[slot] == null) {
                 clearTokens(slot);
                 if (deck.size() > 0) {
@@ -235,7 +253,7 @@ public class Dealer implements Runnable {
         if(env.config.turnTimeoutMillis > 0) {
             long countdown = (reshuffleTime - System.currentTimeMillis() - 1);
             boolean warn = countdown < env.config.turnTimeoutWarningMillis;
-            env.ui.setCountdown(countdown, warn);
+            env.ui.setCountdown(Math.max(countdown,0), warn);
         }
         else {
             if (reset) timerStart = System.currentTimeMillis();
@@ -321,7 +339,7 @@ public class Dealer implements Runnable {
      * @param id:      player's id
      * @param penalty  player's penalty
      */
-    void penalizePlayer(int id, long penalty) {
+    private void penalizePlayer(int id, long penalty) {
         Player player = players[id];
         long currentPenalty;
         do {
@@ -365,5 +383,13 @@ public class Dealer implements Runnable {
      */
     public Player[] getPlayers() {
         return players;
+    }
+
+    /**
+     * For testing- returns the value of the field terminate
+     * @return true iff terminate = true
+     */
+    public boolean getTerminationState(){
+        return terminate;
     }
 }
