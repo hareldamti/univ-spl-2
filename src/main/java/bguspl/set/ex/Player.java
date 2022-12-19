@@ -131,7 +131,7 @@ public class Player implements Runnable {
             }
             while (!terminate) {
                 Random random = new Random();
-                toggleToken(random.nextInt(12));
+                toggleToken(random.nextInt(env.config.rows*env.config.columns));
             }
             env.logger.info("Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);

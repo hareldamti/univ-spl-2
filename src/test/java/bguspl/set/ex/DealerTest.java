@@ -53,9 +53,6 @@ public class DealerTest {
             players[i] = new Player(env, dealer, table, i, true);
         }
         dealer = new Dealer(env, table, players);
-
-        
-        
         assertInvariants();
     }
 
