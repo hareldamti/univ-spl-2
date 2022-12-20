@@ -12,13 +12,19 @@ with a short description of:
 
 1. Fully supporting all configuration fields and avoiding the use of magic numbers
 
-We are not entitled to this bonus.
+1. Using the env.config values in every relevant place.
+2. In almost every method in classes - Dealer, Player, Table
+3. While setting values with config doesn't require specific testing,
+   we changed each of the values we've set and made sure it changed the run accordingly.
 
 --------------------
 
 2. Terminating all threads (that you created) gracefully and in reverse order to the order they were created in.
 
-We are not entitled to this bonus.
+1. We used the terminate methods in Dealer and Player to terminate the threads in reverse order.
+2. The dealer's 'terminate' invokes the same method in the players, and then interrupts their threads, with reverse order of initialization.
+3. We logged each thread start and termination in INFO level, and checked for both a full game and early exit (with the window handler)
+   that the order of termination was reversed for the players' threads, and prior to the dealer's thread.
 
 --------------------
 
@@ -27,7 +33,9 @@ config.turnTimeoutMillis < 0: display nothing.
 config.turnTimeoutMillis = 0: display a timer since the last action (reshuffle or set collected).
 Note: in modes without a countdown timer the dealer must ensure there is always at least one legal set on the table.
 
-We are not entitled to this bonus.
+1. In each of the relevant methods, we checked for the mod with env.config.
+2. Dealer's run, updateTimerDisplay, sleepUntilWokenOrTimeout.
+3. We tested the requirements for the game run (synchronization, smooth run, etc..) for each of the mods. 
 
 --------------------
 
@@ -35,4 +43,8 @@ We are not entitled to this bonus.
 changed on the display, key input needs to be handled, etc.) and the only threads created by you are:
 1 thread per player + 1 additional thread for non-human players.
 
-We are not entitled to this bonus.
+1. Using wait instead of sleep for timeout, and notifying threads only on crucial events.
+2. Dealer: sleepUntilWokenOrTimeout (wait for a request or timer update).
+   Semaphore: dealerLock (dealer waits for table release).
+   Player: toggleToken (wait for dealer's decision), run (wait for key press)
+3. We used logging for wait & notify timings and identities in each of the wait calls to detect liveness issues.

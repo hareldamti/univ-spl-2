@@ -29,7 +29,6 @@ public class DealerTest {
 
     Dealer dealer;
 
-    Player[] players;
     @Mock
     private UserInterface ui;
     @Mock

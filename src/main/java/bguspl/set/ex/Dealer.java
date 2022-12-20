@@ -40,6 +40,7 @@ public class Dealer implements Runnable {
      * Utils
      */
     private long timerStart;
+    private final int TIMER_ROUND_DOWN = -1;
 
     /**
      * The list of card ids that are left in the dealer's deck.
@@ -50,7 +51,10 @@ public class Dealer implements Runnable {
      * True iff game should be terminated due to an external event.
      */
     private volatile boolean terminate;
-
+    /**
+     * True iff end terms are met and no cards need to be placed.
+     */
+    private boolean gameFinished = false;
     /**
      * The time when the dealer needs to reshuffle the deck due to turn timeout.
      */
@@ -77,6 +81,7 @@ public class Dealer implements Runnable {
     @Override
     public void run() {
         env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
+
         
         for (int i=0; i < players.length; i++) {
             playerThreads[i] = new Thread(this.players[i]);
@@ -88,26 +93,48 @@ public class Dealer implements Runnable {
         table.tokensLock.dealerUnlock();
         
         while (!shouldFinish()) {
-            timerLoop();
+            timerStart = System.currentTimeMillis();
+            reshuffleTime = timerStart + env.config.turnTimeoutMillis;
             updateTimerDisplay(false);
-            // i.e if mod = timed rounds
+
             if (env.config.turnTimeoutMillis > 0) {
+
+                timerLoop();
+                updateTimerDisplay(false);
                 table.tokensLock.dealerLock();
                 removeAllCardsFromTable();
                 placeCardsOnTable();
                 table.tokensLock.dealerUnlock();
             }
+
+            else {
+                boolean reset = false;
+                synchronized(setRequests) {
+                    if (setRequests.size() == 0)
+                        sleepUntilWokenOrTimeout();
+                    reset = checkSets();
+                }
+                boolean noSetsAvailable = env.util.findSets(
+                    Arrays.stream(table.getCardsOnTable()).collect(Collectors.toList()), 1
+                    ).size() == 0;
+                if(noSetsAvailable){
+                    table.tokensLock.dealerLock();
+                    removeAllCardsFromTable();
+                    if (!gameFinished) placeCardsOnTable();
+                    table.tokensLock.dealerUnlock();
+                }
+                reset = reset || noSetsAvailable;
+                if (env.config.turnTimeoutMillis == 0) updateTimerDisplay(reset);
+            }
         }
 
-        table.tokensLock.dealerLock();  
-        removeAllCardsFromTable();
-        table.tokensLock.dealerUnlock();
-        
         terminate();
 
         for (int i = playerThreads.length - 1; i >= 0; i--)
             try{ playerThreads[i].join(); } catch (InterruptedException ignored) {}
 
+        
+        removeAllCardsFromTable();
         announceWinners();
         env.logger.info("Thread " + Thread.currentThread().getName() + " terminated.");
     }
@@ -116,45 +143,19 @@ public class Dealer implements Runnable {
      * The inner loop of the dealer thread that runs as long as the countdown did not time out.
      */
     private void timerLoop() {
-        timerStart = System.currentTimeMillis();
-        reshuffleTime = timerStart + env.config.turnTimeoutMillis + 1000;
+        while (!terminate && System.currentTimeMillis() < reshuffleTime) {
+            sleepUntilWokenOrTimeout();
+            updateTimerDisplay(false);
+            synchronized(setRequests){
+                if(checkSets()){
+                    timerStart = System.currentTimeMillis();
+                    reshuffleTime = timerStart + env.config.turnTimeoutMillis;
+                    updateTimerDisplay(false);
+                }
+            }
+        }
         
-        if (env.config.turnTimeoutMillis > 0) {
-            while (!terminate && System.currentTimeMillis() < reshuffleTime) {
-                sleepUntilWokenOrTimeout();
-                updateTimerDisplay(false);
-                synchronized(setRequests){
-                    if(checkSets()){
-                        timerStart = System.currentTimeMillis();
-                        reshuffleTime = timerStart + env.config.turnTimeoutMillis + 1000;
-                        updateTimerDisplay(false);
-                    }
-                }
-            }
-        }
-        else {
-            while(!shouldFinish()) {
-                boolean reset = false;
-                synchronized(setRequests){
-                    if (setRequests.size() == 0)
-                        sleepUntilWokenOrTimeout();
-                    reset = checkSets();
-                }
-                
-                boolean noSetsAvailable = env.util.findSets(
-                    Arrays.stream(table.getCardsOnTable()).collect(Collectors.toList()), 1
-                    ).size() == 0;
-
-                if(noSetsAvailable){
-                    table.tokensLock.dealerLock();
-                    removeAllCardsFromTable();
-                    placeCardsOnTable();
-                    table.tokensLock.dealerUnlock();
-                }
-                reset = reset || noSetsAvailable;
-                if (env.config.turnTimeoutMillis == 0) updateTimerDisplay(reset);
-            }
-        }
+        
     }
 
     /**
@@ -178,7 +179,9 @@ public class Dealer implements Runnable {
         for(int i = 0; i < env.config.rows * env.config.columns; i++)
             if(table.slotToCard[i] != null) 
                 fullDeck.add(table.slotToCard[i]);
-        return terminate || env.util.findSets(fullDeck, 1).size() == 0;
+        
+        gameFinished = terminate || env.util.findSets(fullDeck, 1).size() == 0;
+        return gameFinished;
     }
     
 
@@ -217,6 +220,8 @@ public class Dealer implements Runnable {
                 }
             }
         }
+        
+        if (env.config.hints) table.hints();
     }
 
     /**
@@ -237,7 +242,7 @@ public class Dealer implements Runnable {
     private void sleepUntilWokenOrTimeout() {
         long extraMillis = 1000 + (timerStart - System.currentTimeMillis()) % 1000;
         if (env.config.turnTimeoutMillis > 0) {
-            long countdown = (reshuffleTime - System.currentTimeMillis() - 1);
+            long countdown = (reshuffleTime - System.currentTimeMillis() + TIMER_ROUND_DOWN);
             boolean warn = countdown < env.config.turnTimeoutWarningMillis;
             if (warn) extraMillis = 10 + (timerStart - System.currentTimeMillis()) % 10;
         }
@@ -251,7 +256,7 @@ public class Dealer implements Runnable {
      */
     private void updateTimerDisplay(boolean reset) {
         if(env.config.turnTimeoutMillis > 0) {
-            long countdown = (reshuffleTime - System.currentTimeMillis() - 1);
+            long countdown = (reshuffleTime - System.currentTimeMillis() + TIMER_ROUND_DOWN);
             boolean warn = countdown < env.config.turnTimeoutWarningMillis;
             env.ui.setCountdown(Math.max(countdown,0), warn);
         }
@@ -303,7 +308,7 @@ public class Dealer implements Runnable {
                 synchronized(table.playersTokens) { tokenPlacements = table.playersTokens.get(requestPlayerId); }
                 synchronized(tokenPlacements) {
                     int[] chosenCards = new int[tokenPlacements.size()];
-                    boolean illegalSet = tokenPlacements.size() < 3;
+                    boolean illegalSet = tokenPlacements.size() < env.config.featureSize;
                     for (int i = 0; !illegalSet && i < tokenPlacements.size(); i++){
                         illegalSet = table.slotToCard[tokenPlacements.get(i)] == null;
                         if (!illegalSet)

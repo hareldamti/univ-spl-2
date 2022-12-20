@@ -16,7 +16,7 @@ import javax.swing.UIDefaults.ActiveValue;
  * This class contains the data that is visible to the player.
  *
  * @inv slotToCard[x] == y iff cardToSlot[y] == x
- * @inv 3 >= playerTokens.size() >= for playerTokens in playersTokens
+ * @inv env.config.featureSize >= playerTokens.size() >= for playerTokens in playersTokens
  *
  */
 public class Table {
@@ -131,7 +131,7 @@ public class Table {
      * Assumes the function call is wrapped in the semaphore's lock. 
      * @param player - the player's id.
      * @param slot   - the slot on which to toggle the token.
-     * @return       - whether 3 token are now placed and the dealer should be called.
+     * @return       - whether (env.config.featureSize) token are now placed and the dealer should be called.
      */
     public boolean toggleToken(int player, int slot){
         List<Integer> tokenPlacements;
@@ -140,10 +140,10 @@ public class Table {
             tokenPlacements.remove(tokenPlacements.indexOf(slot));
             removeToken(player, slot);
         }
-        else if (tokenPlacements.size() < 3) {
+        else if (tokenPlacements.size() < env.config.featureSize) {
             tokenPlacements.add(slot);
             placeToken(player, slot);
-            if (tokenPlacements.size() == 3) return true;
+            if (tokenPlacements.size() == env.config.featureSize) return true;
         }
         return false;
     }

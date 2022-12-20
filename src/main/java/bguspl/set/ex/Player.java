@@ -12,7 +12,7 @@ import java.util.concurrent.ArrayBlockingQueue;
  *
  * @inv id >= 0
  * @inv score >= 0
- * @inv 3 >= pressedSlots.size() >= 0
+ * @inv env.config.featureSize >= pressedSlots.size() >= 0
  * @inv penaltySec >= 0
  */
 public class Player implements Runnable {
@@ -87,9 +87,9 @@ public class Player implements Runnable {
         this.table = table;
         this.id = id;
         this.human = human;
-        this.pressedSlots = new ArrayBlockingQueue<Integer>(3);
+        this.pressedSlots = new ArrayBlockingQueue<Integer>(env.config.featureSize);
         if (table != null && table.playersTokens != null)
-            table.playersTokens.add(new ArrayList<Integer>(3));
+            table.playersTokens.add(new ArrayList<Integer>(env.config.featureSize));
         this.dealer = dealer;
         this.penaltySec = new AtomicLong(0);
 
@@ -123,15 +123,9 @@ public class Player implements Runnable {
         // note: this is a very very smart AI (!)
         aiThread = new Thread(() -> {
             env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
             while (!terminate) {
                 Random random = new Random();
-                toggleToken(random.nextInt(env.config.rows*env.config.columns));
+                toggleToken(random.nextInt(env.config.rows * env.config.columns));
             }
             env.logger.info("Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);
